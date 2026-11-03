@@ -151,7 +151,97 @@ async def media(rel: str):
     p = (DATA.parent / rel).resolve()
     if DATA not in p.parents or not p.is_file():
         raise HTTPException(404)
-    return FileResponse(p, media_type="video/mp4")
+    import mimetypes
+    return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+
+
+LIBRARY = DATA / "library"
+
+
+def _library() -> list[dict]:
+    """Real footage (data/library, committed) plus the synthetic ground-truth clips (data/synth)."""
+    clips = []
+    lj = LIBRARY / "library.json"
+    if lj.exists():
+        for c in json.loads(lj.read_text(encoding="utf-8"))["clips"]:
+            clips.append({**c, "url": f"/api/media/{c['path']}", "poster_url": f"/api/media/{c['poster']}"})
+    for gt in sorted((DATA / "synth").glob("*.json")):
+        mp4 = gt.with_suffix(".mp4")
+        if not mp4.exists():
+            continue
+        g = json.loads(gt.read_text(encoding="utf-8"))
+        rel = mp4.relative_to(DATA.parent).as_posix()
+        clips.append({"id": f"synth-{gt.stem}", "title": f"Synthetic · {gt.stem.replace('_', ' ')}", "kind": g.get("scene", "synthetic"),
+                      "featured": False, "real": False, "note": g.get("description", "Synthetic clip with exact ground truth."),
+                      "what": g.get("description", ""), "credit": "Argonaut test bench", "license": "MIT (this repo)",
+                      "source_url": None, "path": rel, "url": f"/api/media/{rel}", "poster_url": None,
+                      "width": g.get("width"), "height": g.get("height"), "fps": g.get("fps"),
+                      "duration_s": g.get("duration_s"), "has_audio": True})
+    return clips
+
+
+@app.get("/api/library")
+async def library():
+    return {"clips": _library()}
+
+
+class Play(BaseModel):
+    clip_id: str
+    mode: str = "analyse"  # "analyse": full identification + agent, paced in real time; "stream": live camera engine
+
+
+@app.post("/api/sessions/{sid}/play")
+async def play(sid: str, body: Play):
+    """Run a library clip through the real pipeline in real time; the console plays the same video (media event)."""
+    s = SESSIONS.get(sid) or SESSIONS.setdefault(sid, Session(sid, "Asset"))
+    clip = next((c for c in _library() if c["id"] == body.clip_id), None)
+    if clip is None:
+        return {"ok": False, "error": f"unknown clip {body.clip_id}"}
+    path = str(DATA.parent / clip["path"])
+    s.asset_name = clip["title"]
+    old = TASKS.get(sid)
+    if old and not old.done():
+        old.cancel()
+    if body.mode == "stream":
+        TASKS[sid] = asyncio.create_task(_guard(s, _stream_file(s, sid, path, clip)))
+    else:
+        TASKS[sid] = asyncio.create_task(_guard(s, s.analyse_clip(path, realtime=1.0)))
+    return {"ok": True, "clip": clip, "mode": body.mode}
+
+
+async def _stream_file(s: Session, sid: str, path: str, clip: dict, cam_fps: float = 30.0):
+    """Feed a file into the live engine frame by frame (and its audio into the mic tachometer) at real speed."""
+    import time as _t
+
+    import cv2
+    import numpy as np
+
+    from .dsp.audio import load_audio
+    await s.emit({"type": "media", "url": clip["url"], "width": clip.get("width"), "height": clip.get("height"),
+                  "fps": clip.get("fps"), "clip_id": clip["id"], "mode": "stream"})
+    eng = LIVE[sid] = LiveEngine(s)
+    cap = cv2.VideoCapture(path)
+    src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    step = max(1, round(src_fps / cam_fps))
+    audio = await asyncio.to_thread(load_audio, path)
+    t0, i, ai = _t.perf_counter(), 0, 0
+    try:
+        while True:
+            ok, fr = cap.read()
+            if not ok:
+                break
+            if i % step == 0:
+                t = i / src_fps
+                await eng.push_image(t, fr)
+                a1 = int(t * 24000)
+                if audio is not None and a1 > ai:
+                    await eng.push_audio((np.clip(audio[ai:a1], -1, 1) * 32767).astype(np.int16).tobytes())
+                    ai = a1
+                await asyncio.sleep(max(0.0, t - (_t.perf_counter() - t0)))
+            i += 1
+    finally:
+        cap.release()
+    await s.emit({"type": "coach", "level": "ok", "text": f"End of clip: {clip['title']}. Choose another source or run Identify."})
 
 
 @app.get("/api/runs")

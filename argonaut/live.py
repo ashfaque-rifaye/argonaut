@@ -96,6 +96,11 @@ class LiveEngine:
         if img is None:
             self.dropped += 1
             return
+        await self.push_image(t, img, arrived)
+
+    async def push_image(self, t: float, img: np.ndarray, arrived: float | None = None):
+        """Same path as a browser camera frame, for server-side sources (real-footage library playback)."""
+        arrived = arrived or time.perf_counter()
         if img.shape[1] > self.max_width:
             sc = self.max_width / img.shape[1]
             img = cv2.resize(img, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA)

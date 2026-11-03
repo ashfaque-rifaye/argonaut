@@ -164,3 +164,12 @@ REST `POST /api/sessions/{id}/rto/stop` → `{ok}`.
  "provenance":{"verified":11, "unverified":1}}
 ```
 `start`/`end` are character offsets into `text`. The UI marks verified numbers (subtle tick) and unverified ones (red underline).
+
+## v3 additions: real-footage library
+
+- `GET /api/library` → `{clips: [{id, title, kind, featured, real, note, what, credit, license, source_url, url, poster_url, width, height, fps, duration_s, has_audio}]}`. Real clips come from `data/library/` (published footage under CC BY / CC0 / public domain; credit and source required in the UI). Synthetic clips are `real: false`.
+- `POST /api/sessions/{id}/play {clip_id, mode: "analyse"|"stream"}` → `{ok, clip, mode}`.
+  - `analyse`: full identification paced in real time (sensors, telemetry with `clip_t`, spectra, waterfalls, Campbell, FDD, diagnosis via Muse Wonder, proposal).
+  - `stream`: the clip is fed frame by frame into the live camera engine (latency, de-aliasing, mic tachometer). Same path as a webcam.
+  - The server emits a `media` event (`url`, plus `clip_id` and `mode`), so the Live view plays the same video in sync.
+- Starting a new play cancels the previous one in that session.
