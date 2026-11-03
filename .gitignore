@@ -1,0 +1,32 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Local media and run output (large; keep out of the repo)
+data/raw/
+data/runs/*
+!data/runs/demo_*/
+*.mov
+*.MOV
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Run artefacts: keep events.jsonl (replays), drop media copies
+data/runs/*.mp4
+data/runs/*/clip_*
+web/dist/
+scripts/_*.py
+.claude/settings.local.json
