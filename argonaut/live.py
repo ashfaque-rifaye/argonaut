@@ -101,10 +101,15 @@ class LiveEngine:
             img = cv2.resize(img, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self.regions is None:
+            # Start measuring at once on provisional regions; SAM 3.1 masks replace them when ready.
+            from .pipeline import _fallback_regions
+            from .models.sam import sensors_event
+            self.regions = _fallback_regions(*gray.shape[::-1])
+            self._anchor(gray)
+            await self.s.emit(sensors_event(self.regions, gray.shape[1], gray.shape[0]))
             if not self._placing:
                 self._placing = True
                 asyncio.create_task(self._place(img, gray))
-            return
         if self.ref is None or gray.shape != self.ref.shape:
             self._anchor(gray)
         for rid, tr in self.tracks.items():
@@ -132,41 +137,57 @@ class LiveEngine:
             regs = []
             if mc.available():
                 from .models import sam, spark
-                prompts, ref = self.prompts, "wall"
+                prompts, ref, scene = self.prompts, "wall", {}
                 if not prompts:
-                    scene = await spark.understand_scene(img, self.s.emit)
+                    scene = await spark.understand_scene(img, self.s.emit, effort="minimal")
                     prompts, ref = scene["sensor_prompts"][:4], scene.get("reference_prompt") or "wall"
                     self.s.nameplate = scene.get("nameplate") or {}
                     sr = scene.get("scale_reference") or {}
                     if sr.get("pixel_size") and sr.get("real_size_mm"):
                         self.mm_per_px = sr["real_size_mm"] / sr["pixel_size"]
                     await self.s.emit({"type": "coach", "level": scene["capture"]["level"], "text": scene["capture"]["advice"]})
-                regs = await sam.place_sensors(img, prompts, ref, self.s.emit)
+                regs = await sam.place_sensors(img, prompts, ref, self.s.emit, effort="minimal",
+                                               boxes=scene.get("boxes"))
             if not regs:
-                from .pipeline import _fallback_regions
-                regs = _fallback_regions(w, h)
+                return  # keep the provisional regions
             if not any(r.is_reference for r in regs):
                 from .pipeline import _fallback_regions
                 regs.append(_fallback_regions(w, h)[-1])
             self.regions = regs
-            self._anchor(gray)
+            self.ref = None  # re-anchor on the next frame with the SAM masks
             from .models.sam import sensors_event
             await self.s.emit(sensors_event(regs, w, h))
+        except Exception as e:  # background task: surface the failure instead of losing it
+            await self.s.emit({"type": "error", "message": f"sensor placement failed: {type(e).__name__}: {e}"})
         finally:
             self._placing = False
 
     # ---------------------------------------------------------------- analysis
     def _acoustic_speed(self):
-        if self.audio_n < AUDIO_RATE:
+        """Microphone tachometer over the rolling 4 s buffer, using the same continuity tracker as clip mode
+        (a ridge followed slice to slice is far more robust on real broadband machine noise than one window)."""
+        if self.audio_n < 2 * AUDIO_RATE:
             return None
-        x = np.concatenate(list(self.audio))[-2 * AUDIO_RATE:]
+        x = np.concatenate(list(self.audio))[-4 * AUDIO_RATE:]
         from .dsp import audio as A
-        f, a = A.spectrum(x, AUDIO_RATE, fmax=1500.0, seconds=1.0)
         hint = (self.s.nameplate.get("rpm") or 0) / 60 or None
-        sp, contrast = identify.estimate_speed(f, a, f_range=(5.0, 400.0), hint_hz=hint)
-        if not hint:
-            sp, _k = identify.refine_fundamental(f, a, sp)  # vane/blade pass -> shaft speed
-        return (sp, contrast) if contrast > 3.0 else None
+        n_slices = max(4, int(len(x) / AUDIO_RATE / 0.25) - 2)
+        tone, conf, _wf, k = A.acoustic_track(x, AUDIO_RATE, np.linspace(0.25, len(x) / AUDIO_RATE - 0.25, n_slices),
+                                              f_range=(5.0, 400.0), hint_hz=hint)
+        blades = int(self.s.nameplate.get("blades_or_vanes") or 0)
+        sp = float(np.median(tone[-4:]))
+        if blades > 1 and not hint:
+            # Blade/vane count from Muse Spark: shaft = blade-pass fundamental / blades, smoothed over recent estimates.
+            f, a = A.spectrum(x, AUDIO_RATE, fmax=1500.0, seconds=2.0)
+            sh, _bpf, prom = identify.shaft_from_blade_pass(f, a, blades)
+            if sh and prom > 8:
+                self._bpf_hist = (getattr(self, "_bpf_hist", []) + [sh])[-5:]
+                med = float(np.median(self._bpf_hist))
+                if len(self._bpf_hist) >= 3 and np.median(np.abs(np.array(self._bpf_hist) - med)) < 0.05 * med:
+                    return med, prom / 8
+            return None
+        stable = np.ptp(tone[-4:]) / max(np.median(tone[-4:]), 1e-6) < 0.08
+        return (sp, float(np.median(conf[-4:]))) if stable and np.median(conf[-4:]) > 1.5 else None
 
     async def _loop(self):
         while True:
@@ -199,7 +220,8 @@ class LiveEngine:
             fm, am = spectral.amp_spectrum(xm, fps)
             sp_hz, _div, _n = DA.resolve_speed(spectral.find_peaks(fm, am, n=6, fmin=0.5), fps, sp_hz,
                                                bin_hz=fm[1] - fm[0])
-        need_dealias = sp_hz is not None and 2 * sp_hz > fps / 2 * 0.9
+        provisional = all(r.confidence is None for r in self.regions)  # SAM masks not placed yet
+        need_dealias = sp_hz is not None and 2 * sp_hz > fps / 2 * 0.9 and not provisional
         out, best = [], None
         for r in chans:
             d = np.array(self.disp[r.id]) - shake
@@ -221,20 +243,24 @@ class LiveEngine:
             seg = spectral.segment_rms_velocity(x, fps, (0.5, fps / 2), n_seg=6)
             scale = vel / max(float(np.mean(seg)), 1e-9) if len(seg) else 1.0
             ci = [c * scale for c in spectral.mean_ci(seg)] if len(seg) > 1 else [vel, vel]
+            rigid = tracks_rigid(self.tracks[r.id], x)
             out.append({"id": r.id, "disp_mm_rms": float(np.std(x)), "vel_mm_s_rms": vel, "vel_ci": ci,
-                        "iso_zone": severity.zone(vel, cls), "rigid": tracks_rigid(self.tracks[r.id], x)})
-            if best is None or vel > best[1]:
-                best = (r.id, vel, f, m, lo, hi, peaks, assigned, ci)
+                        "iso_zone": severity.zone(vel, cls) if rigid and not provisional else None, "rigid": rigid})
+            if not rigid and any(o["rigid"] for o in out):
+                continue  # features moving independently (blades/occlusion): never the severity channel
+            if best is None or vel > best[1] or (not best[9] and rigid):
+                best = (r.id, vel, f, m, lo, hi, peaks, assigned, ci, rigid)
         if not out:
             return
         latency_ms = (time.perf_counter() - self.arrival[-1]) * 1000
         self.lat.append(latency_ms)
-        rid, overall, f, m, lo, hi, peaks, assigned, ci = best
+        rid, overall, f, m, lo, hi, peaks, assigned, ci, best_rigid = best
         speed_hz = sp_hz if sp_hz else (max(peaks, key=lambda p: p["amp"])["f_hz"] if peaks else 0.0)
         await self.s.emit({"type": "telemetry", "speed_hz": speed_hz, "speed_rpm": speed_hz * 60,
                            "speed_source": "audio (tonal order)" if sp_hz else "video",
                            "channels": out, "overall_vel_mm_s_rms": overall, "overall_vel_ci": ci,
-                           "iso_zone": severity.zone(overall, cls),
+                           "iso_zone": severity.zone(overall, cls) if best_rigid and not provisional else None,
+                           "provisional": provisional or not best_rigid,
                            "latency": {"frame_to_telemetry_ms": latency_ms, "p95_ms": float(np.percentile(self.lat, 95)),
                                        "fps_in": fps, "frames_dropped": self.dropped},
                            "band": DA.usable_band(fps, sp_hz if need_dealias else None)})

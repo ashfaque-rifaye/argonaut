@@ -198,6 +198,11 @@ async def ws_session(ws: WebSocket, sid: str):
                     await voice.start()
                 if voice:
                     await voice.push(pcm)
+            elif kind == "media":  # a streaming client announces the clip it plays, so viewers can show it
+                rel = str(msg.get("path", "")).replace("\\", "/").lstrip("/")
+                if (DATA.parent / rel).resolve().is_file() and DATA in (DATA.parent / rel).resolve().parents:
+                    await s.emit({"type": "media", "url": f"/api/media/{rel}", "width": msg.get("width", 640),
+                                  "height": msg.get("height", 360), "fps": msg.get("fps", 30)})
             elif kind == "sensors.set":
                 s.sensor_prompts = msg.get("prompts") or None
                 if sid in LIVE:

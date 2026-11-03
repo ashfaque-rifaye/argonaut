@@ -18,6 +18,11 @@ SCENE_SCHEMA = {
                            "description": "2-5 short noun phrases naming rigid machine parts to measure, "
                                           "e.g. 'motor housing', 'pump casing', 'baseplate', 'fan guard'"},
         "reference_prompt": {"type": "string", "description": "a static background surface, e.g. 'wall', 'floor'"},
+        "sensor_boxes": {"type": "array", "description": "tight pixel box for each sensor_prompt, same order",
+                         "items": {"type": "object", "properties": {
+                             "name": {"type": "string"}, "x1": {"type": "number"}, "y1": {"type": "number"},
+                             "x2": {"type": "number"}, "y2": {"type": "number"}},
+                             "required": ["name", "x1", "y1", "x2", "y2"]}},
         "scale_reference": {"type": "object", "properties": {
             "object": {"type": "string"}, "real_size_mm": {"type": "number"},
             "pixel_size": {"type": "number"}}, "required": ["object", "real_size_mm", "pixel_size"]},
@@ -29,7 +34,8 @@ SCENE_SCHEMA = {
             "level": {"type": "string", "enum": ["ok", "warn", "block"]},
             "advice": {"type": "string"}}, "required": ["level", "advice"]},
     },
-    "required": ["machine_type", "drive", "sensor_prompts", "reference_prompt", "scale_reference", "nameplate", "capture"],
+    "required": ["machine_type", "drive", "sensor_prompts", "reference_prompt", "sensor_boxes", "scale_reference",
+                 "nameplate", "capture"],
 }
 
 SCENE_PROMPT = """You are the field eyes of a vibration and machinery-dynamics engineer.
@@ -54,14 +60,17 @@ def _img_part(frame: np.ndarray) -> dict:
     return {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()}
 
 
-async def _json(model: str, content: list[dict], schema: dict, name: str, max_tokens: int = 4000) -> dict:
+async def _json(model: str, content: list[dict], schema: dict, name: str, max_tokens: int = 4000,
+                effort: str | None = None) -> dict:
     last = None
+    extra = {"reasoning": {"effort": effort}} if effort else {}
     for budget in (max_tokens, max_tokens * 2):  # reasoning shares the output budget; retry once with more room
         r = await meta().responses.create(
             model=model,
             input=[{"type": "message", "role": "user", "content": content}],
             text={"format": {"type": "json_schema", "name": name, "schema": schema}},
             max_output_tokens=budget,
+            **extra,
         )
         try:
             return json.loads(r.output_text)
@@ -70,10 +79,23 @@ async def _json(model: str, content: list[dict], schema: dict, name: str, max_to
     raise ValueError(f"{name}: model returned no valid JSON ({last})")
 
 
-async def understand_scene(frame: np.ndarray, emit: Emit | None = None) -> dict:
-    async with stage(emit, "spark", SPARK, "scene, nameplate, scale, capture check"):
-        return await _json(SPARK, [{"type": "input_text", "text": SCENE_PROMPT}, _img_part(frame)],
-                           SCENE_SCHEMA, "scene")
+async def understand_scene(frame: np.ndarray, emit: Emit | None = None, effort: str = "low") -> dict:
+    """effort='minimal' for live mode (~4 s), 'low' for clip analysis."""
+    h, w = frame.shape[:2]
+    prompt = SCENE_PROMPT + (f"\n- The image is {w}x{h} px (x right, y down). For every proposed part also give a "
+                             "tight pixel box in sensor_boxes.")
+    async with stage(emit, "spark", SPARK, f"scene, parts + boxes, nameplate, scale ({effort})"):
+        out = await _json(SPARK, [{"type": "input_text", "text": prompt}, _img_part(frame)],
+                          SCENE_SCHEMA, "scene", effort=effort)
+    boxes = {}
+    for b in out.get("sensor_boxes") or []:
+        x1, y1, x2, y2 = (int(round(b[k])) for k in ("x1", "y1", "x2", "y2"))
+        x1, x2 = sorted((max(0, min(w - 1, x1)), max(0, min(w, x2))))
+        y1, y2 = sorted((max(0, min(h - 1, y1)), max(0, min(h, y2))))
+        if x2 - x1 > 8 and y2 - y1 > 8:
+            boxes[b["name"]] = [x1, y1, x2, y2]
+    out["boxes"] = boxes
+    return out
 
 
 LOCATE_SCHEMA = {
@@ -86,14 +108,16 @@ LOCATE_SCHEMA = {
 }
 
 
-async def locate_parts(frame: np.ndarray, names: list[str], emit: Emit | None = None) -> dict[str, list[int]]:
+async def locate_parts(frame: np.ndarray, names: list[str], emit: Emit | None = None,
+                       effort: str = "low") -> dict[str, list[int]]:
     """Muse Spark localises named machine parts as pixel boxes; SAM 3.1 then refines each box to a mask."""
     h, w = frame.shape[:2]
     prompt = (f"The image is {w}x{h} pixels (x right, y down, origin top-left). For each part, give a tight "
               f"bounding box around only that rigid part, in pixels. Parts: {', '.join(names)}. "
               "Set visible=false if a part is not in the image.")
     async with stage(emit, "spark", SPARK, f"localise {len(names)} parts"):
-        out = await _json(SPARK, [{"type": "input_text", "text": prompt}, _img_part(frame)], LOCATE_SCHEMA, "parts")
+        out = await _json(SPARK, [{"type": "input_text", "text": prompt}, _img_part(frame)], LOCATE_SCHEMA, "parts",
+                          effort=effort)
     boxes = {}
     for p in out["parts"]:
         x1, y1, x2, y2 = (int(round(v)) for v in (p["x1"], p["y1"], p["x2"], p["y2"]))

@@ -63,6 +63,38 @@ def refine_fundamental(f, amp, f0: float, min_hz: float = 4.0, max_div: int = 12
     return f0 / best_k, best_k
 
 
+def shaft_from_blade_pass(f, amp, blades: int, f_range=(20.0, 1500.0)):
+    """Shaft speed when the blade/vane count is known (Muse Spark counts it from the image).
+
+    In fans and pumps the aerodynamic/hydraulic blade-pass tone (BPF = blades x shaft) is normally the
+    strongest tonal line, with its harmonics above it. Take the strongest line in the band as BPF and
+    divide by the blade count. Returns (shaft_hz, bpf_hz, prominence over the noise floor)."""
+    sel = (f >= f_range[0]) & (f <= f_range[1])
+    fs, a = f[sel], amp[sel]
+    noise = np.median(a) + 1e-12
+    idx, _ = signal.find_peaks(a, prominence=4 * noise)
+    if not len(idx):
+        return None, None, 0.0
+    i = int(idx[np.argmax(a[idx])])
+    top = float(fs[i])
+    # The loudest line may be a BPF harmonic. Walk down to the lowest fundamental whose whole series
+    # (base, 2*base, ..., top) is present; a lone sub-multiple line (e.g. a 2x shaft line) does not qualify.
+    bpf = top
+    for j in (5, 4, 3, 2):
+        base = top / j
+        if base < f_range[0] / 2:
+            continue
+        if all(_local_max(fs, a, base * m, rel_bw=0.006) > 6 * noise and not _mains(base * m) for m in range(1, j)):
+            bpf = base
+            break
+    return float(bpf / blades), float(bpf), float(_local_max(fs, a, bpf) / noise)
+
+
+def _mains(fx: float, tol: float = 0.01) -> bool:
+    """Electrical lines (multiples of 50/60 Hz, e.g. 2x line-frequency hum) are not aerodynamic harmonics."""
+    return any(abs(fx - k * m) <= tol * fx for m in (50.0, 60.0) for k in range(1, 9))
+
+
 def _local_max(f, amp, fc, rel_bw=0.015):
     sel = (f >= fc * (1 - rel_bw)) & (f <= fc * (1 + rel_bw))
     return float(amp[sel].max()) if sel.any() else 0.0

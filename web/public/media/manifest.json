@@ -1,0 +1,21 @@
+{
+  "_doc": "Media for the landing page. Paths are relative to /media/<theme>/. Each entry is a filename or a list tried in order (video first, then still). Missing files fall back to a gradient + the animated overlay. Hero: 16:9 video (1920x1080, muted loop) + poster. Stages: 16:9 stills 1376x768 (.webp) or short muted loops (.mp4).",
+  "dark": {
+    "hero": ["hero.mp4"],
+    "hero-poster": ["hero-poster.webp"],
+    "sense": ["sense.mp4", "sense.webp"],
+    "measure": ["measure.mp4", "measure.webp"],
+    "identify": ["identify.mp4", "identify.webp"],
+    "optimise": ["optimise.mp4", "optimise.webp"],
+    "prove": ["prove.mp4", "prove.webp"]
+  },
+  "light": {
+    "hero": ["hero.mp4"],
+    "hero-poster": ["hero-poster.webp"],
+    "sense": ["sense.mp4", "sense.webp"],
+    "measure": ["measure.mp4", "measure.webp"],
+    "identify": ["identify.mp4", "identify.webp"],
+    "optimise": ["optimise.mp4", "optimise.webp"],
+    "prove": ["prove.mp4", "prove.webp"]
+  }
+}

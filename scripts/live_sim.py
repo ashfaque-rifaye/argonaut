@@ -28,7 +28,7 @@ async def main(path, cam_fps=30.0):
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     sc = 640 / W
-    eng.regions = [Region(n, n, tuple(int(v * sc) for v in p["bbox_rest"]), is_reference=p["is_reference"])
+    eng.regions = [Region(n, n, tuple(int(v * sc) for v in p["bbox_rest"]), is_reference=p["is_reference"], confidence=1.0)
                    for n, p in gt["parts"].items() if n in ("wall", "motor", "pump", "baseplate", "stand", "base")]
     eng.mm_per_px = gt["mm_per_px"] / sc
     audio = A.load_audio(path)

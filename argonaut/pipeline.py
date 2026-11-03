@@ -158,7 +158,16 @@ class Session:
                 # If no subharmonic structure was found (k == 1) but Muse Spark counted blades, the
                 # tracked tone is blade pass: divide by the blade count it read from the image.
                 blades = (self.nameplate.get("blades_or_vanes") or 0) or 1
-                div = blades if (tone_k == 1 and not hint) else 1
+                div = 1
+                if blades > 1 and not hint:
+                    # Muse Spark counted the blades: anchor the tracked ridge to the blade-pass rule
+                    # (shaft = blade-pass fundamental / blades) on the steadiest part of the clip.
+                    seg = audio[-min(len(audio), 6 * 24000):] if sp[-1] >= sp[0] else audio[:6 * 24000]
+                    fa_, aa_ = A.spectrum(seg, 24000, fmax=1500.0, seconds=2.0)
+                    sh, _bpf, prom = identify.shaft_from_blade_pass(fa_, aa_, int(blades))
+                    ref = float(np.median(tone[-8:] if sp[-1] >= sp[0] else tone[:8]))
+                    if sh and prom > 8:
+                        div = max(ref / sh, 1e-6)
                 sp, conf = tone / div, aconf
                 speed_source = ("audio (blade pass)" if div > 1 or tone_k > 1 else "audio (tonal order)")
                 steady = np.ptp(sp) / max(np.median(sp), 1e-6) < 0.1
