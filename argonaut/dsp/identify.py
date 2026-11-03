@@ -90,6 +90,23 @@ def shaft_from_blade_pass(f, amp, blades: int, f_range=(20.0, 1500.0)):
     return float(bpf / blades), float(bpf), float(_local_max(fs, a, bpf) / noise)
 
 
+SYNC_RPM = (3600, 3000, 1800, 1500, 1200, 1000, 900, 750)
+
+
+def synchronous_divisor(tone_hz: float, max_k: int = 12, max_slip: float = 0.06):
+    """Induction-motor prior: shaft speed sits just BELOW a synchronous speed (50/60 Hz, 2-8 poles),
+    with 0-6 % slip. Return (k, rpm, sync_rpm) for the divisor k that puts tone/k in such a band
+    (smallest slip wins), or None. Used only when no nameplate rpm or blade count is known."""
+    best = None
+    for k in range(1, max_k + 1):
+        rpm = 60.0 * tone_hz / k
+        for sync in SYNC_RPM:
+            slip = (sync - rpm) / sync
+            if 0.0 <= slip <= max_slip and (best is None or slip < best[3]):
+                best = (k, rpm, sync, slip)
+    return None if best is None else best[:3]
+
+
 def _mains(fx: float, tol: float = 0.01) -> bool:
     """Electrical lines (multiples of 50/60 Hz, e.g. 2x line-frequency hum) are not aerodynamic harmonics."""
     return any(abs(fx - k * m) <= tol * fx for m in (50.0, 60.0) for k in range(1, 9))

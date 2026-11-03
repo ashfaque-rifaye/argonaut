@@ -25,6 +25,8 @@ Workflow:
    operation -> resonance (critical speed); high-frequency impulsive noise + cavitation index -> cavitation.
 3. If the asset is variable-speed, call run_optimiser and then propose_setpoint with the result and a
    short engineering rationale (resonance margin, duty, specific energy, NPSH). A human must approve.
+If scale_calibrated is false, do NOT report ISO zones or absolute mm/s severity: say amplitudes are
+relative (uncalibrated scale) and base conclusions on frequencies, orders, phase and ratios only.
 Be concise, technical and specific. Use units."""
 
 TOOLS = [

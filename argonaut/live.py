@@ -150,6 +150,7 @@ class LiveEngine:
                     sr = scene.get("scale_reference") or {}
                     if sr.get("pixel_size") and sr.get("real_size_mm"):
                         self.mm_per_px = sr["real_size_mm"] / sr["pixel_size"]
+                        self.scale_calibrated = 0.02 <= self.mm_per_px <= 5.0
                     await self.s.emit({"type": "coach", "level": scene["capture"]["level"], "text": scene["capture"]["advice"]})
                 regs = await sam.place_sensors(img, prompts, ref, self.s.emit, effort="minimal",
                                                boxes=scene.get("boxes"))
@@ -226,6 +227,7 @@ class LiveEngine:
             sp_hz, _div, _n = DA.resolve_speed(spectral.find_peaks(fm, am, n=6, fmin=0.5), fps, sp_hz,
                                                bin_hz=fm[1] - fm[0])
         provisional = all(r.confidence is None for r in self.regions)  # SAM masks not placed yet
+        calibrated = getattr(self, "scale_calibrated", False)
         need_dealias = sp_hz is not None and 2 * sp_hz > fps / 2 * 0.9 and not provisional
         out, best = [], None
         for r in chans:
@@ -264,7 +266,9 @@ class LiveEngine:
         await self.s.emit({"type": "telemetry", "speed_hz": speed_hz, "speed_rpm": speed_hz * 60,
                            "speed_source": "audio (tonal order)" if sp_hz else "video",
                            "channels": out, "overall_vel_mm_s_rms": overall, "overall_vel_ci": ci,
-                           "iso_zone": severity.zone(overall, cls) if best_rigid and not provisional else None,
+                           "iso_zone": (severity.zone(overall, cls)
+                                        if best_rigid and not provisional and calibrated and overall < 45.0 else None),
+                           "calibrated": bool(calibrated and overall < 45.0),
                            "provisional": provisional or not best_rigid,
                            "latency": {"frame_to_telemetry_ms": latency_ms, "p95_ms": float(np.percentile(self.lat, 95)),
                                        "fps_in": fps, "frames_dropped": self.dropped},

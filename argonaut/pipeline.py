@@ -21,6 +21,7 @@ from .optimize import Twin, optimise
 
 RUNS = Path(__file__).resolve().parent.parent / "data" / "runs"
 WATERFALL_FMAX = 120.0
+PLAUSIBLE_MAX_MM_S = 45.0  # above ISO 20816 zone-D levels of any normal machine: treat as scale error
 
 
 def _f(x):
@@ -100,6 +101,8 @@ class Session:
                 file_id = None
         if not regions:
             regions = _fallback_regions(w, h)
+        # Scale is "calibrated" only if it came from the caller or from a credible reference object.
+        self.scale_calibrated = bool(mm_per_px) and 0.02 <= mm_per_px <= 5.0
         mm_per_px = mm_per_px or 0.5
         from .models.sam import sensors_event
         try:
@@ -168,6 +171,12 @@ class Session:
                     ref = float(np.median(tone[-8:] if sp[-1] >= sp[0] else tone[:8]))
                     if sh and prom > 8:
                         div = max(ref / sh, 1e-6)
+                elif not hint:
+                    # No nameplate, no blade count: induction-motor synchronous-speed prior on the steady part.
+                    ref = float(np.median(tone[-8:] if sp[-1] >= sp[0] else tone[:8]))
+                    snap = identify.synchronous_divisor(ref)
+                    if snap and snap[0] > 1:
+                        div = snap[0]
                 sp, conf = tone / div, aconf
                 speed_source = ("audio (blade pass)" if div > 1 or tone_k > 1 else "audio (tonal order)")
                 steady = np.ptp(sp) / max(np.median(sp), 1e-6) < 0.1
@@ -194,12 +203,14 @@ class Session:
                 ch.append({"id": r.id, "disp_mm_rms": float(np.std(seg)), "vel_mm_s_rms": v,
                            "iso_zone": severity.zone(v, cls)})
             overall = max(c["vel_mm_s_rms"] for c in ch)
+            calibrated = self.scale_calibrated and overall < PLAUSIBLE_MAX_MM_S
             seg_v = spectral.segment_rms_velocity(disp_mm[main.id][n0:n1], fps, (2.0, fps / 2), n_seg=4)
             await self.emit({"type": "telemetry", "clip_t": float(tc), "speed_hz": float(sp[i]), "speed_rpm": float(sp[i] * 60),
                              "speed_source": speed_source, "channels": ch, "overall_vel_mm_s_rms": overall,
                              "overall_vel_ci": list(spectral.mean_ci(seg_v)) if len(seg_v) > 1 else None,
                              "band": DA.usable_band(fps, float(sp[i]) if speed_source.startswith("audio") else None),
-                             "iso_zone": severity.zone(overall, cls)})
+                             "iso_zone": severity.zone(overall, cls) if calibrated else None,
+                             "calibrated": calibrated})
             await self.emit({"type": "waterfall", "clip_t": float(tc), "channel": main.id,
                              "f_max_hz": float(f[wf_sel][-1]), "row": wf_rows[i].tolist()})
             if mic_wf is not None:
@@ -327,7 +338,14 @@ class Session:
                            "sv_ratio": m["sv_ratio"], "channels": [r.label for r in chans]} for m in fdd_modes],
             "channels": [{"id": r.id, "label": r.label, "vel_mm_s_rms": v, "iso_zone": severity.zone(v, cls)}
                          for r, v in zip(chans, overall)],
-            "iso_class": cls, "iso_zone": severity.zone(max(overall), cls),
+            "iso_class": cls,
+            # Absolute severity only with a credible scale and physically plausible levels; otherwise relative.
+            "scale_calibrated": bool(self.scale_calibrated and max(overall) < PLAUSIBLE_MAX_MM_S),
+            "scale_note": (None if self.scale_calibrated and max(overall) < PLAUSIBLE_MAX_MM_S else
+                           "Absolute mm/s is NOT calibrated (no credible scale reference, or levels physically "
+                           "implausible for this machine, e.g. camera motion). Treat amplitudes as relative; "
+                           "frequencies, orders, phases and ratios remain valid."),
+            "iso_zone": severity.zone(max(overall), cls) if self.scale_calibrated and max(overall) < PLAUSIBLE_MAX_MM_S else None,
             "cavitation": cav, "audio_available": fa is not None,
             "nameplate": self.nameplate,
         }

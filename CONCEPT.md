@@ -38,6 +38,12 @@ The agent never produces a number. Every number it writes is checked against too
   - The twin's posterior natural frequency settles at 14.6 Hz against a plant truth of 14.2 Hz. Its single-mode, unbalance-forcing model is simpler than the plant. Decisions stay safe because the optimiser uses the uncertainty band, not the point estimate.
   - Without a nameplate speed, the microphone can't tell which shaft order it hears. The camera's aliases decide it, and that decision is sensitive to sensor placement under heavy hand shake: −37 ± 34% across perturbed regions on the 60 fps shake test. Muse Spark reading the nameplate removes the ambiguity.
   - Motions below about 0.03 px are attenuated by H.264 and by the tracker (median gain 0.8–0.9).
+- **Real footage** (10 published clips in `data/library`; no tachometer ground truth exists for them):
+  - Frequencies, orders and cross-modal consistency are reliable. Examples:
+    - The induction-motor test bench reads **2,978 rpm**, a 2-pole 50 Hz motor at 0.7% slip.
+    - The 2.13 m exhaust fan's steady audio is a clean blade-pass series at **41.25 Hz**. With the 6 blades Muse Spark counted, that gives ≈**412 rpm** (tip speed ≈46 m/s, typical).
+  - Absolute mm/s is only claimed with a credible scale reference and plausible levels. Handheld, unscaled footage is reported as **relative** ("uncalibrated"), and the agent is instructed not to issue ISO zones then. In our first real runs, Muse Wonder had already flagged 400–1500 mm/s readings as implausible instead of alarming.
+  - Without a nameplate or blade count, which order the microphone hears stays ambiguous. An induction-motor synchronous-speed prior (0–6% slip) and the camera's alias check narrow it, but these are priors, not proof.
 
 ---
 
