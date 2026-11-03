@@ -40,8 +40,9 @@ export interface EnvelopeRequest {
 export interface OkResponse {
   ok: boolean
 }
-/** GET /api/sessions/{id}/report: full snapshot (latest of every event). Shape is backend-defined. */
-export type SessionReport = Record<string, unknown>
+/** GET /api/sessions/{id}/report: full snapshot (latest of every event). Shape is backend-defined.
+ *  v4 · carries `scale_calibrated: false` when amplitudes are relative only. */
+export type SessionReport = Record<string, unknown> & { scale_calibrated?: boolean }
 
 /* ─────────────────────── WebSocket: client → server ─────────────────────── */
 
@@ -107,7 +108,8 @@ export interface TelemetryChannel {
   id: string
   disp_mm_rms: number
   vel_mm_s_rms: number
-  iso_zone: IsoZone
+  /** null when the scale is uncalibrated (see TelemetryEvent.calibrated) */
+  iso_zone: IsoZone | null
 }
 /** Known values: "video", "audio", "video+audio", "audio (blade pass)", "audio (tonal order)", "none". */
 export type SpeedSource = string
@@ -121,7 +123,14 @@ export interface TelemetryEvent {
   speed_source: SpeedSource
   channels: TelemetryChannel[]
   overall_vel_mm_s_rms: number
-  iso_zone: IsoZone
+  /** v4 · may be null even when values exist (uncalibrated scale) */
+  iso_zone: IsoZone | null
+  /**
+   * v4 · false = the absolute mm/s scale is not trustworthy (no credible scale reference in real
+   * footage, or physically implausible levels from camera motion). Amplitudes are relative;
+   * frequencies, orders, phase and ratios stay valid. Absent = calibrated (older backends, replays).
+   */
+  calibrated?: boolean
   /** v2 · realtime health of the frame → telemetry path */
   latency?: TelemetryLatency | null
   /** v2 · measurable vibration band right now: camera Nyquist vs with audio de-aliasing */
@@ -434,9 +443,51 @@ export interface MediaEvent {
   type: 'media'
   t?: number
   url: string
-  width: number
-  height: number
-  fps: number
+  width?: number | null
+  height?: number | null
+  fps?: number | null
+  /** v3 · set when the media comes from POST /play (library clip); absent for uploads and older replays */
+  clip_id?: string
+  mode?: PlayMode
+}
+
+/* ───────────── v3 · real-footage library (GET /api/library, POST /api/sessions/{id}/play) ───────────── */
+
+export type PlayMode = 'analyse' | 'stream'
+export type ClipKind = 'fan' | 'pump' | 'motor' | 'rotor' | 'structure' | 'turbine' | (string & {})
+
+export interface LibraryClip {
+  id: string
+  title: string
+  kind: ClipKind
+  featured?: boolean
+  /** true = published real footage (credit + licence must be shown); false = synthetic with exact ground truth */
+  real: boolean
+  note?: string
+  what?: string
+  credit?: string
+  license?: string
+  source_url?: string | null
+  url: string
+  poster_url?: string | null
+  width?: number | null
+  height?: number | null
+  fps?: number | null
+  duration_s?: number | null
+  has_audio?: boolean
+}
+export interface LibraryResponse {
+  clips: LibraryClip[]
+}
+export interface PlayRequest {
+  clip_id: string
+  mode: PlayMode
+}
+export interface PlayResponse {
+  ok: boolean
+  clip?: LibraryClip
+  mode?: PlayMode
+  error?: string
 }
 
 export type ServerMessageType = ServerMessage['type']

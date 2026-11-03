@@ -17,6 +17,7 @@ import { defaultEnvelope } from './envelope'
 import { isServerMessage } from './protocol'
 import { MockEngine } from './mock'
 import { useStore } from './store'
+import { autoStart, loadLibrary } from './library'
 
 /* ───────────────────────── REST ───────────────────────── */
 
@@ -231,16 +232,21 @@ export async function bootstrap() {
   const asset = q.get('asset') ?? 'Fan F-101'
   useStore.getState().set({ assetName: asset })
 
-  if (q.get('mock') === '1') return startMock('Simulator · coast-down scenario for Fan F-101 (4-pole, 5 blades)')
+  if (q.get('mock') === '1') {
+    void loadLibrary() // offered in the Source drawer; picking a clip reopens the console live
+    return startMock('Simulator · coast-down scenario for Fan F-101 (4-pole, 5 blades)')
+  }
 
   const replay = q.get('replay')
   if (replay) {
-    useStore.getState().set({ mode: 'replay', sessionId: replay, startedAt: Date.now() })
+    useStore.getState().set({ mode: 'replay', sessionId: replay, startedAt: Date.now(), videoSource: 'clip' })
     socket = new Socket(`/ws/replay/${encodeURIComponent(replay)}`)
+    void loadLibrary() // credits for a replayed library clip
     return
   }
 
-  let sessionId = q.get('session')
+  const joined = q.get('session')
+  let sessionId = joined
   if (!sessionId) {
     try {
       const ctl = new AbortController()
@@ -251,6 +257,9 @@ export async function bootstrap() {
       return startMock('Backend unreachable at /api. Running the built-in simulator')
     }
   }
-  useStore.getState().set({ mode: 'live', sessionId, startedAt: Date.now() })
+  useStore.getState().set({ mode: 'live', sessionId, startedAt: Date.now(), videoSource: 'clip' })
   socket = new Socket(`/ws/${encodeURIComponent(sessionId)}`)
+  // real by default: a fresh live session plays the featured real clip (or ?clip=<id>&mode=…)
+  if (!joined) void autoStart(q)
+  else void loadLibrary()
 }

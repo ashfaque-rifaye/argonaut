@@ -50,6 +50,7 @@ export function Shortcuts() {
     openHelp = () => setOpen(true)
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return
+      if (useStore.getState().sourceOpen) return // the source drawer owns the keyboard while open
       if (e.key === 'Escape' && open) {
         setOpen(false)
         return
@@ -59,6 +60,10 @@ export function Shortcuts() {
         setOpen((o) => !o)
       } else if (e.key === 't' || e.key === 'T') {
         toggleTheme()
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault()
+        setOpen(false)
+        useStore.getState().set({ sourceOpen: true })
       } else if (/^[1-5]$/.test(e.key)) {
         setOpen(false)
         focusPanel(e.key)
@@ -93,9 +98,10 @@ export function Shortcuts() {
           ))}
           <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-fg-4">View</div>
           {[
+            ['S', 'Choose the source (real footage library, camera, file)'],
             ['T', 'Toggle light / dark theme'],
             ['?', 'Show or hide this overlay'],
-            ['Esc', 'Close overlay or evidence drawer'],
+            ['Esc', 'Close overlay, source or evidence drawer'],
           ].map(([k, l]) => (
             <div key={k} className="flex items-center gap-3 px-2 py-1.5 text-[12.5px] text-fg-2">
               <Kbd>{k}</Kbd>

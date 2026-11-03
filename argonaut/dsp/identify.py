@@ -102,7 +102,9 @@ def synchronous_divisor(tone_hz: float, max_k: int = 12, max_slip: float = 0.06)
         rpm = 60.0 * tone_hz / k
         for sync in SYNC_RPM:
             slip = (sync - rpm) / sync
-            if 0.0 <= slip <= max_slip and (best is None or slip < best[3]):
+            # Ties go to the smallest divisor: tone/k and tone/(4k) can sit at the same slip against
+            # different pole counts; dividing more needs clearly better evidence (0.5 % less slip).
+            if 0.0 <= slip <= max_slip and (best is None or slip < best[3] - 0.005):
                 best = (k, rpm, sync, slip)
     return None if best is None else best[:3]
 

@@ -22,6 +22,7 @@ export function IsoBar({
   height = 10,
   labels = true,
   ci,
+  uncalibrated,
 }: {
   value: number | null
   marker?: number | null
@@ -29,13 +30,16 @@ export function IsoBar({
   labels?: boolean
   /** v2 · 90% confidence interval drawn as a bracket span on the bar */
   ci?: [number, number] | null
+  /** v4 · the mm/s scale is relative: grey the zones, hide the pointer and CI (a zone would be a guess) */
+  uncalibrated?: boolean
 }) {
-  const p = value == null ? null : isoPos(value)
+  const p = value == null || uncalibrated ? null : isoPos(value)
+  if (uncalibrated) ci = null
   const zoneIdx = p == null ? -1 : Math.min(3, Math.floor(p * 4))
   const ptrColor = zoneIdx === 3 ? 'var(--color-alarm)' : zoneIdx === 2 ? 'var(--color-warn)' : 'var(--color-fg-1)'
   return (
     <div className="relative w-full select-none" style={{ paddingTop: 7 }}>
-      <div className="relative flex w-full overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_var(--color-line-2)]" style={{ height }}>
+      <div className={'relative flex w-full overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_var(--color-line-2)] transition-[filter,opacity] duration-300' + (uncalibrated ? ' opacity-35 grayscale' : '')} style={{ height }}>
         {ZONES.map((z, i) => (
           <div key={z.z} className="relative h-full flex-1" style={{ background: z.fill, borderLeft: i ? '1px solid var(--color-bg-0)' : undefined }}>
             {labels && <span className="num absolute inset-0 flex items-center justify-center text-[8.5px] font-semibold text-fg-3">{z.z}</span>}

@@ -205,8 +205,18 @@ async def play(sid: str, body: Play):
     if body.mode == "stream":
         TASKS[sid] = asyncio.create_task(_guard(s, _stream_file(s, sid, path, clip)))
     else:
-        TASKS[sid] = asyncio.create_task(_guard(s, s.analyse_clip(path, realtime=1.0)))
+        TASKS[sid] = asyncio.create_task(_guard(s, s.analyse_clip(path, realtime=1.0, clip_id=clip["id"])))
     return {"ok": True, "clip": clip, "mode": body.mode}
+
+
+@app.post("/api/sessions/{sid}/stop")
+async def stop_play(sid: str):
+    """Stop the clip currently playing in this session (e.g. when switching to the device camera)."""
+    t = TASKS.get(sid)
+    if t and not t.done():
+        t.cancel()
+        return {"ok": True, "stopped": True}
+    return {"ok": True, "stopped": False}
 
 
 async def _stream_file(s: Session, sid: str, path: str, clip: dict, cam_fps: float = 30.0):
@@ -241,7 +251,8 @@ async def _stream_file(s: Session, sid: str, path: str, clip: dict, cam_fps: flo
             i += 1
     finally:
         cap.release()
-    await s.emit({"type": "coach", "level": "ok", "text": f"End of clip: {clip['title']}. Choose another source or run Identify."})
+    await s.emit({"type": "coach", "level": "ok", "clip_end": True,
+                  "text": f"End of clip: {clip['title']}. Choose another source or run Identify."})
 
 
 @app.get("/api/runs")

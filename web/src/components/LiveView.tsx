@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Anchor, Camera, Film, MonitorPlay, ScanLine, Upload } from 'lucide-react'
+import { Activity, Anchor, Camera, ChevronDown, ExternalLink, Film, FlaskConical, Layers, RotateCcw, ScanLine, Upload } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { link } from '../lib/socket'
 import { startAudioStreaming, startFrameStreaming } from '../lib/capture'
+import { chooseFile, licenseOf, replay } from '../lib/library'
 import { useSize } from '../lib/useSize'
-import type { SensorItem } from '../lib/protocol'
-import { Btn, cx, Panel, Seg } from './ui'
-
-type Src = 'sim' | 'webcam' | 'clip'
+import type { PipelineStage, SensorItem } from '../lib/protocol'
+import { Btn, cx, Panel } from './ui'
+import { StageWait } from './StageWait'
 
 function shapeFor(f: number | null, items: SensorItem[]) {
   // amplitude/phase per sensor at the ODS frequency: modal shape if a mode matches, else spectral amplitude
@@ -46,10 +46,14 @@ export function LiveView({ compact }: { compact?: boolean }) {
   const src = useStore((s) => s.videoSource)
   const set = useStore((s) => s.set)
   const mediaUrl = useStore((s) => s.mediaUrl)
+  const np = useStore((s) => s.nowPlaying)
+  const localClip = useStore((s) => s.localClip)
+  const libraryState = useStore((s) => s.libraryState)
+  const sourceOpen = useStore((s) => s.sourceOpen)
+  const pipeline = useStore((s) => s.pipeline)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [clipUrl, setClipUrl] = useState<string | null>(null)
   const [camErr, setCamErr] = useState<string | null>(null)
   const [box, size] = useSize<HTMLDivElement>()
   const polyRefs = useRef<Record<string, SVGPolygonElement | null>>({})
@@ -92,16 +96,34 @@ export function LiveView({ compact }: { compact?: boolean }) {
     }
   }, [src])
 
-  useEffect(() => () => void (clipUrl && URL.revokeObjectURL(clipUrl)), [clipUrl])
-
-  // keep a local clip in sync with the analysis position (telemetry.clip_t)
+  // what the clip <video> plays: a local file wins, else the server's media (library clip, upload, replay)
+  const clipSrc = src === 'clip' ? localClip?.url ?? mediaUrl ?? null : null
+  const streamMode = np?.mode === 'stream' && !localClip
+  // analyse (and replays / uploads) follow the analysis position (telemetry.clip_t); stream just plays
+  const synced = src === 'clip' && !streamMode
+  // a library clip in analyse mode holds its first frame until the pipeline starts walking the clip
+  const holdForSync = synced && !localClip && !!np
   const clipT = tel?.clip_t
+  const lastSync = useRef(0)
   useEffect(() => {
     const v = videoRef.current
-    if (src !== 'clip' || clipT == null || !v || !v.duration) return
-    if (!v.paused && Math.abs(v.currentTime - clipT) < 0.4) return
-    if (Math.abs(v.currentTime - clipT) > 0.4) v.currentTime = Math.min(clipT, v.duration - 0.05)
-  }, [clipT, src])
+    if (!synced || clipT == null || !v || !v.duration) return
+    lastSync.current = performance.now()
+    const drift = v.currentTime - clipT
+    if (Math.abs(drift) > 1.2) v.currentTime = Math.min(clipT, v.duration - 0.05)
+    // small drift: nudge the playback rate instead of seeking, so the footage never stutters
+    v.playbackRate = Math.abs(drift) > 1.2 ? 1 : Math.min(1.3, Math.max(0.7, 1 - drift * 0.6))
+    if (v.paused && clipT < v.duration - 0.1) void v.play().catch(() => {})
+  }, [clipT, synced])
+  // the pipeline paused (model call) or finished walking the clip: hold the frame instead of running ahead
+  useEffect(() => {
+    if (!holdForSync) return
+    const id = window.setInterval(() => {
+      const v = videoRef.current
+      if (v && !v.paused && performance.now() - lastSync.current > 1500) v.pause()
+    }, 400)
+    return () => window.clearInterval(id)
+  }, [holdForSync])
 
   // coach toast visibility
   useEffect(() => {
@@ -204,16 +226,28 @@ export function LiveView({ compact }: { compact?: boolean }) {
     return out
   }, [items, k, W, H])
 
-  const onClip = async (f: File) => {
-    setClipUrl(URL.createObjectURL(f))
-    set({ videoSource: 'clip' })
-    try {
-      const r = await link.uploadClip(f)
-      if (r) useStore.getState().pushConsole({ kind: 'system', text: `Clip uploaded · ${r.width}×${r.height} @ ${r.fps.toFixed(0)} fps · ${r.duration_s.toFixed(1)} s` })
-    } catch (e) {
-      useStore.getState().pushConsole({ kind: 'error', text: `Clip upload failed: ${(e as Error).message}` })
-    }
-  }
+  const clip = src === 'clip' && !localClip ? np?.clip ?? null : null
+  const meta =
+    src === 'webcam'
+      ? 'CAM 0 · device'
+      : src === 'sim'
+        ? 'CAM 0 · simulated'
+        : clip
+          ? `SOURCE · ${clip.title} · ${clip.real ? 'real footage' : 'synthetic · ground truth'} · ${licenseOf(clip)}${mode === 'replay' ? ' · recorded run' : ''}`
+          : localClip
+            ? `SOURCE · ${localClip.name} · from disk`
+            : mediaUrl
+              ? 'SOURCE · recorded clip'
+              : mode === 'live' && libraryState !== 'error'
+                ? 'SOURCE · loading library…'
+                : 'no source'
+  const ended = !!clip && np?.status === 'ended'
+  // which model the footage is waiting on before the first analysed frame
+  const waitStage: PipelineStage = (['sam', 'spark', 'dsp', 'wonder'] as PipelineStage[]).find((k) => pipeline[k].state === 'running') ?? 'sam'
+  const waitingAnalyse = !!clip && np?.mode === 'analyse' && (np.status === 'starting' || np.status === 'playing') && clipT == null
+  const waitingStream = !!clip && streamMode && np?.status !== 'ended' && np?.status !== 'error' && !tel
+  const hudMode = src === 'webcam' ? 'CAM' : src === 'sim' ? 'SIM' : mode === 'replay' ? 'REPLAY' : streamMode ? 'STREAM' : np && !localClip ? 'ANALYSE' : 'CLIP'
+  const openSource = () => set({ sourceOpen: true })
 
   const sendPrompts = () => {
     const p = prompts
@@ -228,18 +262,21 @@ export function LiveView({ compact }: { compact?: boolean }) {
   return (
     <Panel
       title="Live view"
-      meta={src === 'sim' ? 'CAM 0 · simulated' : src === 'webcam' ? 'CAM 0 · device' : 'clip'}
+      meta={<span title={meta}>{meta}</span>}
       right={
         <>
-          <Seg<Src>
-            value={src}
-            onChange={(v) => (v === 'clip' && !clipUrl && !mediaUrl ? fileRef.current?.click() : set({ videoSource: v }))}
-            options={[
-              { v: 'sim', label: <MonitorPlay size={12} />, title: 'Simulated feed' },
-              { v: 'webcam', label: <Camera size={12} />, title: 'Device camera (webcam, USB or capture card)' },
-              { v: 'clip', label: <Film size={12} />, title: 'Upload a clip (mp4/mov)' },
-            ]}
-          />
+          <button
+            type="button"
+            onClick={openSource}
+            aria-haspopup="dialog"
+            aria-expanded={sourceOpen}
+            aria-label="Choose source"
+            title="Choose the source: real footage library, device camera or a clip from disk (S)"
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-line-2 bg-bg-2 pl-1.5 pr-1 text-[10.5px] font-semibold tracking-[0.06em] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+          >
+            {src === 'webcam' ? <Camera size={11} /> : <Layers size={11} />}
+            <ChevronDown size={11} className="text-fg-4" />
+          </button>
           <button
             onClick={toggleOds}
             title="Operating deflection shape: exaggerated motion at a chosen frequency"
@@ -250,15 +287,38 @@ export function LiveView({ compact }: { compact?: boolean }) {
           >
             <Activity size={11} /> ODS
           </button>
-          <input ref={fileRef} type="file" accept="video/mp4,video/quicktime,video/*" className="hidden" onChange={(e) => e.target.files?.[0] && onClip(e.target.files[0])} />
+          <input ref={fileRef} type="file" accept="video/mp4,video/quicktime,video/*" className="hidden" onChange={(e) => e.target.files?.[0] && void chooseFile(e.target.files[0])} />
         </>
       }
       bodyClass="flex flex-col"
     >
       <div ref={box} className="scope-dark relative aspect-video w-full overflow-hidden bg-black">
-        {src === 'sim' && <img src="/mock/rig.svg" alt="Simulated camera view of fan F-101 on its stand" className="absolute inset-0 h-full w-full object-contain" draggable={false} />}
-        {src !== 'sim' && (
-          <video ref={videoRef} src={src === 'clip' ? clipUrl ?? mediaUrl ?? undefined : undefined} className="absolute inset-0 h-full w-full object-contain" autoPlay muted playsInline loop />
+        {/* the simulated rig exists only in the simulator */}
+        {src === 'sim' && mode === 'mock' && <img src="/mock/rig.svg" alt="Simulated camera view of fan F-101 on its stand" className="absolute inset-0 h-full w-full object-contain" draggable={false} />}
+        {src === 'webcam' && <video key="cam" ref={videoRef} className="absolute inset-0 h-full w-full object-contain" autoPlay muted playsInline />}
+        {src === 'clip' && clipSrc && (
+          <video
+            key={localClip ? localClip.url : `${clipSrc}#${np?.nonce ?? 0}`}
+            ref={videoRef}
+            src={clipSrc}
+            poster={clip?.poster_url ?? undefined}
+            className="absolute inset-0 h-full w-full object-contain"
+            autoPlay={!holdForSync}
+            loop={!!localClip}
+            muted
+            playsInline
+            preload="auto"
+            aria-label={clip ? `${clip.title}${clip.real ? ', real footage' : ', synthetic clip'}` : 'Analysed clip'}
+          />
+        )}
+        {src === 'clip' && !clipSrc && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg-0 text-center">
+            <Film size={18} className="text-fg-4" />
+            <div className="text-[12px] text-fg-2">{mode === 'replay' ? 'No footage recorded in this replay' : mode === 'live' && libraryState === 'loading' ? 'Loading footage library…' : 'No source selected'}</div>
+            <Btn size="xs" variant="subtle" onClick={openSource}>
+              <Layers size={11} /> Choose source
+            </Btn>
+          </div>
         )}
         {src === 'webcam' && camErr && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg-1 text-center">
@@ -321,7 +381,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
 
         {/* HUD */}
         <div className="num pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded-[4px] bg-black/60 px-1.5 py-[3px] text-[10px] text-fg-2 backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-alarm anim-pulse" />
+          <span className={cx('h-1.5 w-1.5 rounded-full', ended ? 'bg-fg-3' : 'bg-alarm anim-pulse')} />
+          <span className="font-semibold tracking-[0.08em] text-fg-1">{ended ? 'ENDED' : hudMode}</span>
           {W}×{H} · {tel?.clip_t != null ? `clip ${tel.clip_t.toFixed(1)}` : `t=${tel?.t != null ? tel.t.toFixed(1) : '0.0'}`} s
         </div>
         {items.length > 0 && (
@@ -330,7 +391,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
           </div>
         )}
         {ref && (
-          <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[60%] items-center gap-1.5 rounded-[4px] border border-line-2 bg-bg-1/85 px-1.5 py-[3px] text-[10px] text-fg-2">
+          <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[48%] items-center gap-1.5 rounded-[4px] border border-line-2 bg-bg-1/85 px-1.5 py-[3px] text-[10px] text-fg-2">
             <Anchor size={11} className="text-fg-3" />
             <span className="font-semibold tracking-[0.06em] text-fg-1">REF</span>
             <span className="truncate">
@@ -353,7 +414,65 @@ export function LiveView({ compact }: { compact?: boolean }) {
             <span className="num px-1 text-fg-4">exaggerated · slowed</span>
           </div>
         )}
-        {coach && coachVisible && (
+        {/* waiting on the pipeline before the first analysed frame (the footage holds its first frame) */}
+        {waitingAnalyse && (
+          <div className="anim-in pointer-events-none absolute inset-x-0 bottom-9 flex justify-center px-3">
+            <div className="flex max-w-full flex-col items-center gap-1.5 rounded-lg border border-line-2 bg-bg-1/85 px-3 py-2 text-center backdrop-blur-sm">
+              <div className="text-[11px] text-fg-2">
+                {mode === 'replay' ? 'Replaying recorded run ·' : np?.status === 'starting' ? 'Starting' : 'Analysing'} <span className="font-medium text-fg-1">{clip!.title}</span>
+              </div>
+              <StageWait stage={waitStage} />
+            </div>
+          </div>
+        )}
+        {waitingStream && (
+          <div className="anim-in num pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded-[5px] border border-line-2 bg-bg-1/85 px-2 py-1 text-[10.5px] text-fg-2 backdrop-blur-sm">
+            Live camera engine warming up…
+          </div>
+        )}
+        {ended && (
+          <div className="anim-in absolute left-1/2 top-9 flex max-w-[94%] -translate-x-1/2 items-center gap-1.5 rounded-[6px] border border-line-2 bg-bg-1/90 py-[3px] pl-2 pr-[3px] text-[11px] text-fg-2 backdrop-blur-sm" role="status">
+            <span className="whitespace-nowrap">End of clip · results kept</span>
+            <button type="button" onClick={replay} className="inline-flex h-[22px] items-center gap-1 whitespace-nowrap rounded-[4px] border border-line-2 bg-bg-2 px-1.5 text-[10.5px] font-medium text-fg-1 hover:bg-bg-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent">
+              <RotateCcw size={10} /> Play again
+            </button>
+            <button type="button" onClick={openSource} className="inline-flex h-[22px] items-center gap-1 whitespace-nowrap rounded-[4px] px-1.5 text-[10.5px] font-medium text-fg-2 hover:bg-bg-3 hover:text-fg-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent">
+              <Layers size={10} /> Choose source
+            </button>
+          </div>
+        )}
+        {np?.status === 'error' && clip && (
+          <div className="anim-in absolute left-1/2 top-9 flex max-w-[94%] -translate-x-1/2 items-center gap-1.5 rounded-[6px] border border-alarm/50 bg-alarm-bg/90 py-[3px] pl-2 pr-[3px] text-[11px] text-alarm-2" role="alert">
+            <span className="truncate">Could not start: {np.error}</span>
+            <button type="button" onClick={replay} className="inline-flex h-[22px] items-center gap-1 whitespace-nowrap rounded-[4px] border border-alarm/40 px-1.5 text-[10.5px] font-medium hover:bg-alarm/10">
+              <RotateCcw size={10} /> Retry
+            </button>
+          </div>
+        )}
+        {/* attribution: CC BY requires author, licence and a link to the source while the footage is shown */}
+        {clip && (
+          <div className={cx('absolute right-2 flex max-w-[50%] justify-end', ods.on ? 'bottom-10' : 'bottom-2')}>
+            {clip.real ? (
+              <a
+                href={clip.source_url ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Footage: ${clip.credit ?? 'unknown'} · ${licenseOf(clip)}${clip.source_url ? ` · ${clip.source_url}` : ''}`}
+                className="flex min-w-0 items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-[3px] text-[9.5px] text-fg-2 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-fg-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <span className="truncate">
+                  Footage: {clip.credit ?? 'unknown'} · <span className="num">{licenseOf(clip)}</span>
+                </span>
+                {clip.source_url && <ExternalLink size={9} className="shrink-0 opacity-70" aria-hidden />}
+              </a>
+            ) : (
+              <span className="pointer-events-none flex items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-[3px] text-[9.5px] text-fg-3 backdrop-blur-sm">
+                <FlaskConical size={9} /> synthetic · ground truth
+              </span>
+            )}
+          </div>
+        )}
+        {coach && coachVisible && !(ended && /^end of clip/i.test(coach.text)) && (
           <div
             className={cx(
               'anim-in absolute left-1/2 top-9 max-w-[86%] -translate-x-1/2 rounded-[5px] border px-2 py-1 text-[11px] font-medium backdrop-blur-sm',
@@ -386,7 +505,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
           <Btn size="xs" variant="subtle" onClick={sendPrompts} title="Send sensors.set to SAM 3.1">
             <ScanLine size={11} /> Place
           </Btn>
-          <Btn size="xs" variant="ghost" onClick={() => fileRef.current?.click()} title="Upload a clip">
+          <Btn size="xs" variant="ghost" onClick={() => fileRef.current?.click()} title="Analyse a clip from disk (mp4/mov)" aria-label="Analyse a clip from disk">
             <Upload size={11} />
           </Btn>
         </div>

@@ -68,6 +68,7 @@ class Session:
 
     # ---------------------------------------------------------------- clip analysis
     async def analyse_clip(self, path: str, realtime: float = 1.0, regions: list[Region] | None = None,
+                           clip_id: str | None = None,
                            mm_per_px: float | None = None, run_agent: bool = True):
         """Full identification of a recorded clip, streamed progressively at `realtime` x speed."""
         frames, fps, scale = await asyncio.to_thread(read_video, path)
@@ -82,7 +83,7 @@ class Session:
             from .models import sam, spark
             upload = asyncio.create_task(spark.upload(path, self.emit))
             try:
-                scene = await spark.understand_scene(first_bgr, self.emit)
+                scene = await spark.understand_scene(first_bgr, self.emit, effort="minimal")
                 await self.emit({"type": "coach", **scene["capture"], "text": scene["capture"]["advice"]})
                 self.nameplate = scene.get("nameplate") or {}
             except Exception as e:
@@ -90,7 +91,8 @@ class Session:
             if regions is None:
                 prompts = self.sensor_prompts or (scene or {}).get("sensor_prompts") or ["machine"]
                 ref = (scene or {}).get("reference_prompt") or "wall"
-                regions = await sam.place_sensors(first_bgr, prompts[:5], ref, self.emit)
+                regions = await sam.place_sensors(first_bgr, prompts[:5], ref, self.emit, effort="minimal",
+                                                  boxes=None if self.sensor_prompts else (scene or {}).get("boxes"))
             if scene and not mm_per_px:
                 sr = scene.get("scale_reference") or {}
                 if sr.get("pixel_size") and sr.get("real_size_mm"):
@@ -107,7 +109,8 @@ class Session:
         from .models.sam import sensors_event
         try:
             rel = Path(path).resolve().relative_to(RUNS.parent.parent).as_posix()
-            await self.emit({"type": "media", "url": f"/api/media/{rel}", "width": w, "height": h, "fps": fps})
+            await self.emit({"type": "media", "url": f"/api/media/{rel}", "width": w, "height": h, "fps": fps,
+                             "clip_id": clip_id, "mode": "analyse"})
         except ValueError:
             pass  # clip outside the project: no playback URL
         await self.emit(sensors_event(regions, w, h))
@@ -173,10 +176,10 @@ class Session:
                         div = max(ref / sh, 1e-6)
                 elif not hint:
                     # No nameplate, no blade count: induction-motor synchronous-speed prior on the steady part.
-                    ref = float(np.median(tone[-8:] if sp[-1] >= sp[0] else tone[:8]))
-                    snap = identify.synchronous_divisor(ref)
-                    if snap and snap[0] > 1:
-                        div = snap[0]
+                    raw = float(np.median(tone[-8:] if sp[-1] >= sp[0] else tone[:8])) * tone_k
+                    snap = identify.synchronous_divisor(raw)
+                    if snap:
+                        div = snap[0] / tone_k  # shaft = raw tone / k_sync
                 sp, conf = tone / div, aconf
                 speed_source = ("audio (blade pass)" if div > 1 or tone_k > 1 else "audio (tonal order)")
                 steady = np.ptp(sp) / max(np.median(sp), 1e-6) < 0.1
@@ -223,6 +226,8 @@ class Session:
 
         if getattr(self, "_last_dealias", None):
             await self.emit(self._last_dealias)
+        await self.emit({"type": "coach", "level": "ok", "clip_end": True,
+                         "text": "End of clip: identification and diagnosis follow."})
         # --- identification
         await self._identify(tt, f, S, sp, conf, fps, disp_mm, chans, fa, aa, cav, x, cls)
         if file_id and mc.available():

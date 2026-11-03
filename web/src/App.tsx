@@ -14,6 +14,7 @@ import { TwinPanel } from './components/TwinPanel'
 import { ProposalCard } from './components/ProposalCard'
 import { EvidenceDrawer } from './components/EvidenceDrawer'
 import { Shortcuts } from './components/Shortcuts'
+import { SourceDrawer } from './components/SourceDrawer'
 
 export function App() {
   const loopTab = useStore((s) => s.optimizerTab === 'loop')
@@ -70,6 +71,7 @@ export function App() {
         </div>
       </main>
       <EvidenceDrawer />
+      <SourceDrawer />
       <Shortcuts />
     </div>
   )

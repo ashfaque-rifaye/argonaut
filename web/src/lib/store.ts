@@ -9,6 +9,8 @@ import type {
   CoachEvent,
   DiagnosisEvent,
   Evidence,
+  LibraryClip,
+  PlayMode,
   ModalEvent,
   PipelineEvent,
   PipelineStage,
@@ -52,6 +54,18 @@ export interface RtoSample {
   meas: number | null
   kw: number | null
 }
+/** v4 · what the Live view is playing from the real-footage library */
+export type PlayStatus = 'starting' | 'playing' | 'ended' | 'error'
+export interface NowPlaying {
+  clip: LibraryClip
+  mode: PlayMode
+  status: PlayStatus
+  error?: string
+  /** changes on every (re)start so the <video> element restarts from 0 */
+  nonce: number
+}
+export type LibraryState = 'idle' | 'loading' | 'ready' | 'error'
+
 export type EnvelopeStatus = 'none' | 'submitting' | 'approved' | 'stopping' | 'error'
 export type OptimizerTab = 'proposal' | 'loop'
 
@@ -106,6 +120,16 @@ interface State {
   videoSource: 'sim' | 'webcam' | 'clip'
   mediaUrl: string | null
 
+  /* v4 · source library */
+  library: LibraryClip[] | null
+  libraryState: LibraryState
+  /** recorded run ids (GET /api/runs): `demo_real_<clip id>` = an instant replay of that clip with Meta model output */
+  runs: string[]
+  nowPlaying: NowPlaying | null
+  /** a clip the operator picked from disk (blob URL, played locally) */
+  localClip: { url: string; name: string } | null
+  sourceOpen: boolean
+
   /* v2 */
   dealias: Record<string, DealiasEvent>
   rto: RtoEvent | null
@@ -122,6 +146,8 @@ interface State {
   openEvidence: (t: EvidenceTarget) => void
   closeEvidence: () => void
   reset: () => void
+  /** clear analysis results (new source) but keep the console, provenance and connection */
+  resetAnalysis: () => void
 }
 
 let seq = 0
@@ -263,12 +289,23 @@ export const useStore = create<State>((set, get) => ({
   assetName: 'Fan F-101',
   videoSource: 'sim',
   mediaUrl: null,
+  library: null,
+  libraryState: 'idle',
+  runs: [],
+  nowPlaying: null,
+  localClip: null,
+  sourceOpen: false,
   ...initial(),
 
   set: (p) => set(p),
   reset: () => {
     waterfall.clear()
     set({ ...initial() })
+  },
+  resetAnalysis: () => {
+    waterfall.clear()
+    const { conn: _c, startedAt: _s, console: _k, provenance: _p, msgCount: _m, msgRate: _r, pipeline: _pl, ...rest } = initial()
+    set(rest)
   },
   openEvidence: (t) => set({ drawer: t }),
   closeEvidence: () => set({ drawer: null }),
@@ -288,9 +325,31 @@ export const useStore = create<State>((set, get) => ({
       case 'sensors':
         set({ msgCount, sensors: m })
         return
-      case 'media':
-        set({ msgCount, mediaUrl: m.url, videoSource: s.videoSource === 'webcam' ? 'webcam' : 'clip' })
+      case 'media': {
+        // match the media to a library clip (clip_id from /play, else by URL: analyse mode and older replays)
+        const lib = s.library ?? []
+        const np = s.nowPlaying
+        const clip =
+          (m.clip_id ? lib.find((c) => c.id === m.clip_id) : undefined) ??
+          lib.find((c) => c.url === m.url) ??
+          (np && (np.clip.id === m.clip_id || np.clip.url === m.url) ? np.clip : undefined)
+        let nowPlaying: NowPlaying | null = null
+        if (clip) {
+          const same = np?.clip.id === clip.id
+          nowPlaying = same
+            ? { ...np!, mode: m.mode ?? np!.mode, status: np!.status === 'starting' || np!.status === 'error' ? 'playing' : np!.status }
+            : { clip, mode: m.mode ?? 'analyse', status: 'playing', nonce: Date.now() }
+        }
+        set({
+          msgCount,
+          mediaUrl: m.url,
+          nowPlaying,
+          // a library clip replaces a local file; an unknown URL (the server's copy of an upload) keeps it
+          localClip: clip ? null : s.localClip,
+          videoSource: s.videoSource === 'webcam' && !clip ? 'webcam' : 'clip',
+        })
         return
+      }
       case 'telemetry': {
         const channels: Record<string, number[]> = { ...s.hist.channels }
         for (const c of m.channels) channels[c.id] = push(channels[c.id] ?? [], c.vel_mm_s_rms)
@@ -439,7 +498,8 @@ export const useStore = create<State>((set, get) => ({
         const last = [...s.console].reverse().find((x) => x.kind === 'coach')
         const consoleItems =
           last && last.text === m.text ? s.console : cap([...s.console, { id: nid(), at: Date.now(), kind: 'coach' as const, text: m.text, level: m.level }])
-        set({ msgCount, coach: m, console: consoleItems })
+        const ended = /^end of clip/i.test(m.text) && s.nowPlaying && s.nowPlaying.status !== 'ended'
+        set({ msgCount, coach: m, console: consoleItems, ...(ended ? { nowPlaying: { ...s.nowPlaying!, status: 'ended' as const } } : {}) })
         return
       }
       case 'error':

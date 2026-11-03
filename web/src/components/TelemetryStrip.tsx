@@ -3,7 +3,20 @@ import { AudioLines, ChevronRight, Info, Mic, OctagonAlert, TriangleAlert, Video
 import { useStore } from '../lib/store'
 import { fint, fx } from '../lib/format'
 import { IsoBar } from './IsoBar'
-import { cx, LiveTick, Sparkline } from './ui'
+import { cx, LiveTick, Sparkline, Tip } from './ui'
+
+export const UNCAL_TIP = 'No credible scale reference in this footage: amplitudes are relative; frequencies, orders, phase and ratios remain valid'
+
+/** v4 · telemetry.calibrated === false: the absolute mm/s scale is not trustworthy. */
+function UncalBadge() {
+  return (
+    <Tip content={UNCAL_TIP}>
+      <span tabIndex={0} aria-label={`Uncalibrated, relative amplitudes. ${UNCAL_TIP}`} className="num inline-flex h-[20px] cursor-help items-center whitespace-nowrap rounded-[4px] border border-dashed border-line-3 px-1.5 text-[10px] font-semibold tracking-[0.04em] text-fg-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent">
+        uncalibrated · relative
+      </span>
+    </Tip>
+  )
+}
 
 function SourceChip({ on, icon, label }: { on: boolean; icon: React.ReactNode; label: string }) {
   return (
@@ -37,7 +50,7 @@ function SpeedSourceBadge({ src }: { src: string }) {
   )
 }
 
-function ZoneBadge({ zone }: { zone?: string }) {
+function ZoneBadge({ zone }: { zone?: string | null }) {
   const cls = zone === 'D' ? 'text-alarm border-alarm/45 bg-[var(--alarm-dim)]' : zone === 'C' ? 'text-warn border-warn/40 bg-[var(--warn-dim)]' : 'text-fg-2 border-line-2 bg-bg-2'
   return <span className={cx('num inline-flex h-[20px] items-center rounded-[4px] border px-1.5 text-[10.5px] font-semibold tracking-[0.06em]', cls)}>ZONE {zone ?? '–'}</span>
 }
@@ -57,7 +70,9 @@ export function TelemetryStrip() {
   const src = tel?.speed_source ?? ''
   const diag = [...diagnoses].reverse()[0]
   const meta = (id: string) => sensors?.items.find((i) => i.id === id)
-  const marker = proposal && (proposalStatus === 'pending' || proposalStatus === 'submitting') ? proposal.proposed.vel_mm_s : null
+  const uncal = tel?.calibrated === false
+  const zone = uncal ? null : tel?.iso_zone
+  const marker = !uncal && proposal && (proposalStatus === 'pending' || proposalStatus === 'submitting') ? proposal.proposed.vel_mm_s : null
 
   return (
     <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-px bg-bg-0 md:grid-cols-[minmax(200px,230px)_minmax(280px,340px)_1fr] xl:grid-cols-[minmax(210px,240px)_minmax(300px,360px)_1fr_minmax(300px,380px)]">
@@ -97,14 +112,17 @@ export function TelemetryStrip() {
             <span className="eyebrow truncate">Overall velocity · ISO 20816</span>
             <LiveTick tick={tel?.t} title="telemetry streaming" />
           </span>
-          <ZoneBadge zone={tel?.iso_zone} />
+          {uncal ? <UncalBadge /> : <ZoneBadge zone={zone} />}
         </div>
         <div className="mt-1 flex items-end gap-3">
-          <span className={cx('num text-[30px] leading-none tracking-[-0.03em]', tel?.iso_zone === 'D' ? 'text-alarm' : tel?.iso_zone === 'C' ? 'text-warn' : 'text-fg-1')}>
+          <span
+            className={cx('num text-[30px] leading-none tracking-[-0.03em]', uncal ? 'text-fg-3' : zone === 'D' ? 'text-alarm' : zone === 'C' ? 'text-warn' : 'text-fg-1')}
+            title={uncal ? UNCAL_TIP : undefined}
+          >
             {fx(tel?.overall_vel_mm_s_rms, 2)}
-            <span className="ml-1 text-[12px] tracking-normal text-fg-3">mm/s RMS</span>
+            <span className={cx('ml-1 text-[12px] tracking-normal', uncal ? 'text-fg-4' : 'text-fg-3')}>{uncal ? 'rel. mm/s RMS' : 'mm/s RMS'}</span>
           </span>
-          {tel?.overall_vel_ci && (
+          {tel?.overall_vel_ci && !uncal && (
             <span className="num mb-[2px] hidden whitespace-nowrap text-[10.5px] leading-tight text-fg-3 sm:inline" title="90% confidence interval of the overall velocity">
               <span className="text-fg-4">90% CI </span>
               <span className="text-fg-2">
@@ -114,7 +132,7 @@ export function TelemetryStrip() {
           )}
         </div>
         <div className="mt-1">
-          <IsoBar value={tel?.overall_vel_mm_s_rms ?? null} marker={marker} height={8} ci={tel?.overall_vel_ci} />
+          <IsoBar value={tel?.overall_vel_mm_s_rms ?? null} marker={marker} height={8} ci={tel?.overall_vel_ci} uncalibrated={uncal} />
         </div>
       </div>
 
@@ -123,7 +141,8 @@ export function TelemetryStrip() {
         <div className="grid w-full min-w-max auto-cols-[minmax(108px,1fr)] grid-flow-col xl:auto-cols-[minmax(0,1fr)] divide-x divide-line-1 md:min-w-0">
           {(tel?.channels ?? []).map((c) => {
             const m = meta(c.id)
-            const zc = c.iso_zone === 'D' ? 'text-alarm' : c.iso_zone === 'C' ? 'text-warn' : 'text-fg-3'
+            const cz = uncal ? null : c.iso_zone
+            const zc = cz === 'D' ? 'text-alarm' : cz === 'C' ? 'text-warn' : 'text-fg-3'
             return (
               <button
                 key={c.id}
@@ -133,14 +152,14 @@ export function TelemetryStrip() {
                 <div className="flex min-w-0 items-center gap-1.5">
                   <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: m?.color ?? 'var(--color-fg-3)' }} />
                   <span className="truncate text-[11px] font-medium text-fg-2 group-hover:text-fg-1">{m?.label ?? c.id}</span>
-                  <span className={cx('num ml-auto text-[10px] font-semibold', zc)}>{c.iso_zone}</span>
+                  <span className={cx('num ml-auto text-[10px] font-semibold', zc)}>{cz}</span>
                 </div>
-                <div className="mt-1 flex items-baseline gap-1">
-                  <span className="num text-[17px] leading-none text-fg-1">{fx(c.vel_mm_s_rms, 2)}</span>
-                  <span className="num text-[10px] text-fg-4">mm/s</span>
+                <div className="mt-1 flex items-baseline gap-1" title={uncal ? UNCAL_TIP : undefined}>
+                  <span className={cx('num text-[17px] leading-none', uncal ? 'text-fg-3' : 'text-fg-1')}>{fx(c.vel_mm_s_rms, 2)}</span>
+                  <span className="num text-[10px] text-fg-4">{uncal ? 'rel. mm/s' : 'mm/s'}</span>
                 </div>
                 <div className="mt-1 flex items-end justify-between gap-1">
-                  <span className="num text-[10px] text-fg-3">{fx(c.disp_mm_rms * 1000, 0)} µm</span>
+                  <span className={cx('num text-[10px]', uncal ? 'text-fg-4' : 'text-fg-3')}>{fx(c.disp_mm_rms * 1000, 0)} µm{uncal ? ' rel.' : ''}</span>
                   <Sparkline data={hist.channels[c.id] ?? []} w={52} h={14} color={m?.color ?? 'var(--color-fg-3)'} max={12} />
                 </div>
               </button>
