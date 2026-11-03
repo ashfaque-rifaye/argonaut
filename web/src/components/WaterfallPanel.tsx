@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AudioLines, Waves } from 'lucide-react'
 import { useStore, waterfall } from '../lib/store'
-import { INFERNO, INFERNO_GRADIENT } from '../lib/colormap'
+import { colormapFor, colormapGradient, colormapName } from '../lib/colormap'
+import { alpha, PALETTES, useTheme } from '../lib/theme'
 import { niceTicks } from '../lib/format'
 import { useSize } from '../lib/useSize'
 import { ChannelPicker } from './SpectrumPanel'
@@ -18,6 +19,7 @@ export function WaterfallPanel() {
   const has = useStore((s) => s.msgCount > 0 && !!ch && waterfall.bufs.has(ch))
   const [box, size] = useSize<HTMLDivElement>()
   const canvas = useRef<HTMLCanvasElement>(null)
+  const theme = useTheme()
 
   useEffect(() => {
     const cv = canvas.current
@@ -29,6 +31,9 @@ export function WaterfallPanel() {
     const off = document.createElement('canvas')
     const octx = off.getContext('2d')!
     let lastVersion = -1
+    const P = PALETTES[theme]
+    const CM = colormapFor(theme)
+    const empty = parseInt(P.bg1.slice(1), 16)
     let raf = 0
 
     const render = () => {
@@ -50,9 +55,9 @@ export function WaterfallPanel() {
         const o = r * cols * 4
         if (!src) {
           for (let c = 0; c < cols; c++) {
-            px[o + c * 4] = 7
-            px[o + c * 4 + 1] = 8
-            px[o + c * 4 + 2] = 10
+            px[o + c * 4] = (empty >> 16) & 255
+            px[o + c * 4 + 1] = (empty >> 8) & 255
+            px[o + c * 4 + 2] = empty & 255
             px[o + c * 4 + 3] = 255
           }
           continue
@@ -60,9 +65,9 @@ export function WaterfallPanel() {
         const n = src.length
         for (let c = 0; c < cols; c++) {
           const v = src[n === cols ? c : Math.min(n - 1, Math.round((c / (cols - 1)) * (n - 1)))]
-          px[o + c * 4] = INFERNO[v * 3]
-          px[o + c * 4 + 1] = INFERNO[v * 3 + 1]
-          px[o + c * 4 + 2] = INFERNO[v * 3 + 2]
+          px[o + c * 4] = CM[v * 3]
+          px[o + c * 4 + 1] = CM[v * 3 + 1]
+          px[o + c * 4 + 2] = CM[v * 3 + 2]
           px[o + c * 4 + 3] = 255
         }
       }
@@ -79,7 +84,7 @@ export function WaterfallPanel() {
       ctx.clearRect(0, 0, W, H)
       ctx.imageSmoothingEnabled = true
       ctx.drawImage(off, l, t, pw, ph)
-      ctx.strokeStyle = '#283038'
+      ctx.strokeStyle = P.line2
       ctx.lineWidth = 1
       ctx.strokeRect(l + 0.5, t + 0.5, pw - 1, ph - 1)
 
@@ -87,7 +92,7 @@ export function WaterfallPanel() {
       const fx = (f: number) => l + (f / b.fMax) * pw
       // identified structural modes (vibration waterfall only)
       if (ch !== 'mic') ctx.setLineDash([3 * dpr, 4 * dpr])
-      ctx.strokeStyle = 'rgba(231,234,238,0.32)'
+      ctx.strokeStyle = theme === 'light' ? alpha(P.fg1, 0.45) : alpha(P.fg1, 0.32)
       for (const m of ch === 'mic' ? [] : st.campbell?.modes ?? []) {
         const x = Math.round(fx(m.f_hz)) + 0.5
         ctx.beginPath()
@@ -116,23 +121,23 @@ export function WaterfallPanel() {
           const f = k * f1
           if (f > b.fMax) continue
           const x = fx(f)
-          ctx.fillStyle = '#e7eaee'
+          ctx.fillStyle = P.fg1
           ctx.beginPath()
           ctx.moveTo(x - 4 * dpr, t)
           ctx.lineTo(x + 4 * dpr, t)
           ctx.lineTo(x, t + 6 * dpr)
           ctx.closePath()
           ctx.fill()
-          ctx.fillStyle = 'rgba(13,15,18,.8)'
+          ctx.fillStyle = alpha(P.bg1, 0.85)
           const tw = ctx.measureText(lab).width + 6 * dpr
           const lx = x + 5 * dpr + tw > l + pw ? x - 5 * dpr - tw : x + 5 * dpr
           ctx.fillRect(lx, t + 2 * dpr, tw, 12 * dpr)
-          ctx.fillStyle = '#e7eaee'
+          ctx.fillStyle = P.fg1
           ctx.fillText(lab, lx + 3 * dpr, t + 11 * dpr)
         }
       }
       // axes
-      ctx.fillStyle = '#6c7580'
+      ctx.fillStyle = P.fg3
       ctx.font = `${10 * dpr}px ${MONO}`
       ctx.textAlign = 'center'
       for (const f of niceTicks(0, b.fMax, Math.max(3, Math.floor(pw / dpr / 70)))) {
@@ -153,7 +158,7 @@ export function WaterfallPanel() {
     }
     raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
-  }, [size.w, size.h, ch])
+  }, [size.w, size.h, ch, theme])
 
   return (
     <Panel
@@ -161,9 +166,9 @@ export function WaterfallPanel() {
       meta={kind === 'mic' ? 'acoustic · microphone · time × frequency' : 'order tracking · time × frequency'}
       right={
         <>
-          <div className="mr-2 hidden items-center gap-1.5 lg:flex" title="Colormap: inferno, 0–68 dB re 4 µm/s">
+          <div className="mr-2 hidden items-center gap-1.5 lg:flex" title={`Colormap: ${colormapName(theme)}, 0–68 dB re 4 µm/s`}>
             <span className="num text-[9.5px] text-fg-4">0</span>
-            <span className="h-1.5 w-20 rounded-full" style={{ background: INFERNO_GRADIENT }} />
+            <span className="h-1.5 w-20 rounded-full" style={{ background: colormapGradient(theme) }} />
             <span className="num text-[9.5px] text-fg-4">68 dB</span>
           </div>
           {kind === 'vib' && <ChannelPicker />}
@@ -189,10 +194,10 @@ export function WaterfallPanel() {
       }
     >
       <div ref={box} className="absolute inset-0">
-        <canvas ref={canvas} className="block h-full w-full" />
+        <canvas ref={canvas} className={`block h-full w-full transition-opacity duration-500 ${has ? 'opacity-100' : 'opacity-0'}`} />
       </div>
- {!has && kind === 'mic' && <Empty title="No acoustic stream" hint="The microphone waterfall appears when the backend sends waterfall rows on channel “mic”." />}
-      {!has && kind === 'vib' && <Empty title="Waiting for spectra" hint="Rows append at ~4 Hz. During a coast-down, order lines sweep toward 0 Hz and modes stay put." />}
+      {!has && kind === 'mic' && <Empty title="No acoustic stream" hint="The microphone waterfall appears when the backend sends waterfall rows on channel “mic”." stage="spark" skeleton="heat" />}
+      {!has && kind === 'vib' && <Empty title="Waiting for spectra" hint="Rows append at ~4 Hz. During a coast-down, order lines sweep toward 0 Hz and modes stay put." stage="dsp" skeleton="heat" />}
     </Panel>
   )
 }

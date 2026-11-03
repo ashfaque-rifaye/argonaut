@@ -2,7 +2,8 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 
-@theme {
+@theme static {
+  /* Tokens are switched per theme below (html[data-theme]). lib/theme.ts mirrors them for canvas. */
   --color-bg-0: #07080a;
   --color-bg-1: #0d0f12;
   --color-bg-2: #121519;
@@ -10,20 +11,35 @@
   --color-bg-4: #21262c;
   --color-line-1: #1c2127;
   --color-line-2: #283038;
+  --color-line-3: #323a43;
   --color-fg-1: #e7eaee;
   --color-fg-2: #a2abb5;
   --color-fg-3: #6c7580;
-  --color-fg-4: #454d56;
+  --color-fg-4: #4f5862;
   --color-accent: #9d8cff;
   --color-accent-2: #c3b8ff;
+  --color-on-accent: #0b0a14;
   --color-warn: #f0a63a;
+  --color-warn-2: #ffd391;
+  --color-warn-bg: #271d0e;
   --color-alarm: #f2484b;
+  --color-alarm-2: #ff8a8c;
+  --color-alarm-bg: #2a1214;
   --color-ok: #3cbf8a;
   --color-trace-1: #d8dee6;
   --color-trace-2: #7b8693;
+  --color-grid: #171b20;
+  --color-iso-a: #20262d;
+  --color-iso-b: #2a3139;
+  --color-iso-c: #3a2f1c;
+  --color-iso-d: #3d1d1f;
+  --color-shadow: #000000;
+  --color-page: #07080a;
+  --color-well: #000000;
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", monospace;
   --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
@@ -32,7 +48,57 @@
   --warn-dim: rgba(240, 166, 58, 0.12);
   --alarm-dim: rgba(242, 72, 75, 0.13);
   --ok-dim: rgba(60, 191, 138, 0.12);
-  --grid: #171b20;
+  --grid: var(--color-grid);
+  --glow: 0.7;
+}
+
+/* Light: an ISA-101 light-grey HMI, not an inverted dark theme. Panels are near-white on a
+   light-grey bezel, ink text, and every semantic hue is darkened until it passes WCAG AA on the panel. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg-0: #dde1e6;
+  --color-bg-1: #f7f8fa;
+  --color-bg-2: #eef0f3;
+  --color-bg-3: #e5e8ec;
+  --color-bg-4: #dadee3;
+  --color-line-1: #d5dae0;
+  --color-line-2: #c2c9d1;
+  --color-line-3: #aab2bc;
+  --color-fg-1: #11161c;
+  --color-fg-2: #38414c;
+  --color-fg-3: #525b66;
+  --color-fg-4: #6d7580;
+  --color-accent: #6550e0;
+  --color-accent-2: #4e3bc4;
+  --color-on-accent: #ffffff;
+  --color-warn: #a35c00;
+  --color-warn-2: #7a4500;
+  --color-warn-bg: #fbecd2;
+  --color-alarm: #cf2a2f;
+  --color-alarm-2: #a51d22;
+  --color-alarm-bg: #fbe0e0;
+  --color-ok: #0f7f53;
+  --color-trace-1: #1b2129;
+  --color-trace-2: #8a939e;
+  --color-grid: #e6e9ed;
+  --color-iso-a: #e4e8ec;
+  --color-iso-b: #d2d8de;
+  --color-iso-c: #f4dfb6;
+  --color-iso-d: #f3cbcb;
+  --color-shadow: #4a5563;
+  --color-page: #eef0f3;
+  --color-well: #12161b;
+  --accent-dim: rgba(101, 80, 224, 0.1);
+  --warn-dim: rgba(163, 92, 0, 0.1);
+  --alarm-dim: rgba(207, 42, 47, 0.09);
+  --ok-dim: rgba(15, 127, 83, 0.1);
+  --glow: 0.35;
+}
+
+/* a theme switch is a clean cut: no transition smears for one frame */
+.theme-switching,
+.theme-switching *:not(.theme-anim) {
+  transition: none !important;
 }
 
 html,
@@ -53,19 +119,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 ::selection {
-  background: rgba(157, 140, 255, 0.35);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  color: var(--color-fg-1);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: #283038 transparent;
+  scrollbar-color: var(--color-line-2) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #232a31;
+  background: var(--color-line-2);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -94,8 +160,8 @@ body {
   50% { opacity: 0.35; }
 }
 @keyframes ring {
-  0% { box-shadow: 0 0 0 0 rgba(157, 140, 255, 0.5); }
-  100% { box-shadow: 0 0 0 6px rgba(157, 140, 255, 0); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 50%, transparent); }
+  100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); }
 }
 @keyframes scan {
   0% { transform: translateX(-100%); }
@@ -111,7 +177,7 @@ body {
 }
 @keyframes alarm-flash {
   0%, 100% { background-color: var(--alarm-dim); }
-  50% { background-color: rgba(242, 72, 75, 0.24); }
+  50% { background-color: color-mix(in srgb, var(--color-alarm) 24%, transparent); }
 }
 .anim-pulse { animation: pulse-soft 1.6s ease-in-out infinite; }
 .anim-ring { animation: ring 1.6s ease-out infinite; }
@@ -127,5 +193,159 @@ body {
 /* uPlot skin */
 .uplot { font-family: var(--font-mono); }
 .u-legend { display: none; }
-.u-cursor-x, .u-cursor-y { border-color: rgba(231, 234, 238, 0.18) !important; }
-.u-select { background: rgba(157, 140, 255, 0.08); }
+.u-cursor-x, .u-cursor-y { border-color: color-mix(in srgb, var(--color-fg-1) 18%, transparent) !important; }
+.u-select { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+
+/* ───────────── v3 · landing motion ───────────── */
+
+/* scroll reveal (opacity + transform only: no layout shift) */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition: opacity 0.8s var(--ease-out-expo) var(--d, 0ms), transform 0.9s var(--ease-out-expo) var(--d, 0ms);
+}
+.reveal[data-in] {
+  opacity: 1;
+  transform: none;
+}
+
+/* stage overlays: everything waits for an ancestor [data-in] */
+.ov-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--dur, 1.3s) var(--ease-out-expo) var(--d, 0ms);
+}
+[data-in] .ov-draw { stroke-dashoffset: 0; }
+.ov-fill {
+  fill-opacity: 0;
+  transition: fill-opacity 0.9s ease var(--d, 0ms);
+}
+[data-in] .ov-fill { fill-opacity: 0.13; }
+.ov-fade {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0);
+  transition: opacity 0.6s ease var(--d, 0ms), transform 0.7s var(--ease-out-expo) var(--d, 0ms);
+}
+svg .ov-fade { transform: none; }
+[data-in] .ov-fade { opacity: 1; transform: none; }
+.ov-pop {
+  opacity: 0;
+  transform: scale(0.3);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.3s ease var(--d, 0ms), transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) var(--d, 0ms);
+}
+[data-in] .ov-pop { opacity: 1; transform: none; }
+.ov-ring {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+[data-in] .ov-ring { animation: ov-ring 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) infinite; }
+@keyframes ov-ring {
+  0% { opacity: 0.85; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(3.6); }
+}
+.ov-sweep { opacity: 0; }
+[data-in] .ov-sweep { animation: ov-sweep 1.5s var(--ease-out-soft) 0.05s both; }
+@keyframes ov-sweep {
+  0% { opacity: 1; transform: translateX(0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(1780px); }
+}
+
+/* hero: a soft one-time entrance for the headline block */
+@keyframes hero-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.hero-in { animation: hero-in 1s var(--ease-out-expo) var(--d, 0ms) both; }
+
+/* streaming value: a brief accent underline sweep when a value updates (console) */
+@keyframes tick-flash {
+  0% { color: var(--color-accent-2); }
+  100% { color: inherit; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .ov-fade, .ov-pop { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .ov-draw { stroke-dashoffset: 0 !important; transition: none !important; }
+  .ov-fill { fill-opacity: 0.13 !important; transition: none !important; }
+  .ov-ring, .ov-sweep { animation: none !important; opacity: 0 !important; }
+  .hero-in { animation: none !important; }
+}
+
+/* ───────────── v3 · console ───────────── */
+
+/* skeleton shimmer (loading states) */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-bg-2) 0%, var(--color-bg-3) 40%, var(--color-bg-2) 80%);
+  background-size: 250% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+.skeleton-svg { animation: pulse-soft 2.4s ease-in-out infinite; }
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+/* streaming value: a 6 px dot that flashes on every update (re-keyed per message) */
+@keyframes live-tick {
+  0% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 0.28; transform: scale(1); }
+}
+.live-tick { animation: live-tick 650ms var(--ease-out-soft) both; }
+
+/* keyboard focus of a panel (1–5): a brief accent bezel */
+@keyframes panel-focus {
+  0% { box-shadow: inset 0 0 0 1px var(--color-accent), 0 0 0 0 color-mix(in srgb, var(--color-accent) 35%, transparent); }
+  70% { box-shadow: inset 0 0 0 1px var(--color-accent), 0 0 0 4px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  100% { box-shadow: inset 0 0 0 1px transparent; }
+}
+.panel-focus { animation: panel-focus 1.4s var(--ease-out-soft); position: relative; z-index: 2; }
+
+/* SAM result: masks stroke-draw, fills and chips fade in (backwards fill: attributes win afterwards) */
+@keyframes mask-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes mask-fill {
+  from { fill-opacity: 0; }
+}
+.mask-in {
+  stroke-dasharray: 1;
+  animation: mask-draw 900ms var(--ease-out-expo) var(--d, 0ms) backwards, mask-fill 900ms ease var(--d, 0ms) backwards;
+}
+.mask-in-done { stroke-dasharray: none; }
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+.chip-in { animation: chip-in 420ms var(--ease-out-expo) var(--d, 0ms) backwards; }
+
+/* fixed dark tokens: video wells stay graphite in the light theme (text over footage) */
+.scope-dark {
+  --color-bg-0: #07080a;
+  --color-bg-1: #0d0f12;
+  --color-bg-2: #121519;
+  --color-bg-3: #191d22;
+  --color-line-1: #1c2127;
+  --color-line-2: #283038;
+  --color-fg-1: #e7eaee;
+  --color-fg-2: #a2abb5;
+  --color-fg-3: #6c7580;
+  --color-fg-4: #4f5862;
+  --color-accent: #9d8cff;
+  --color-accent-2: #c3b8ff;
+  --color-on-accent: #0b0a14;
+  --color-warn-2: #ffd391;
+  --color-warn-bg: #271d0e;
+  --color-alarm-2: #ff8a8c;
+  --color-alarm-bg: #2a1214;
+  --accent-dim: rgba(157, 140, 255, 0.14);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .skeleton-svg, .live-tick, .panel-focus, .mask-in, .chip-in { animation: none !important; }
+  .mask-in { stroke-dasharray: none; }
+}

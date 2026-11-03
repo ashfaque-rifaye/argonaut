@@ -7,6 +7,7 @@ import type { SpectrumEvent } from '../lib/protocol'
 import { cx, Empty, Panel, Seg } from './ui'
 import { AudioLines } from 'lucide-react'
 import { DealiasView } from './DealiasView'
+import { alpha, PALETTES, useTheme } from '../lib/theme'
 
 const MONO = '"JetBrains Mono Variable", ui-monospace, monospace'
 
@@ -23,7 +24,7 @@ export function ChannelPicker() {
           key={it.id}
           onClick={() => set({ selectedChannel: it.id })}
           title={`${it.label}${it.is_reference ? ' (reference)' : ''}`}
-          className={cx('num inline-flex h-[18px] items-center gap-1 rounded-[4px] px-1.5 text-[10px] transition-colors', sel === it.id ? 'bg-bg-4 text-fg-1 shadow-[inset_0_0_0_1px_#323a43]' : 'text-fg-3 hover:text-fg-2')}
+          className={cx('num inline-flex h-[18px] items-center gap-1 rounded-[4px] px-1.5 text-[10px] transition-colors', sel === it.id ? 'bg-bg-4 text-fg-1 shadow-[inset_0_0_0_1px_var(--color-line-3)]' : 'text-fg-3 hover:text-fg-2')}
         >
           <span className="h-1.5 w-1.5 rounded-[1px]" style={{ background: it.color, opacity: it.is_reference ? 0.6 : 1 }} />
           {it.id}
@@ -55,16 +56,25 @@ export function SpectrumPanel() {
   const specRef = useRef<SpectrumEvent | undefined>(undefined)
   const yMax = useRef(1)
   const readout = useRef<HTMLSpanElement>(null)
+  const theme = useTheme()
+  const builtFor = useRef(theme)
   specRef.current = spec
 
   // (re)create plot
   useEffect(() => {
     const el = box.current
     if (!el || !size.w || !size.h) return
+    if (plot.current && builtFor.current !== theme) {
+      plot.current.destroy()
+      plot.current = null
+    }
     if (plot.current) {
       plot.current.setSize({ width: size.w, height: size.h })
       return
     }
+    builtFor.current = theme
+    const P = PALETTES[theme]
+    const light = theme === 'light'
     const log = scale === 'log'
     const opts: uPlot.Options = {
       width: size.w,
@@ -79,20 +89,20 @@ export function SpectrumPanel() {
       },
       axes: [
         {
-          stroke: '#6c7580',
+          stroke: P.fg3,
           font: `10px ${MONO}`,
           size: 22,
           gap: 4,
-          grid: { stroke: '#171b20', width: 1 },
-          ticks: { stroke: '#283038', width: 1, size: 3 },
+          grid: { stroke: P.grid, width: 1 },
+          ticks: { stroke: P.line2, width: 1, size: 3 },
           values: (_u, v) => v.map((x) => `${x}`),
         },
         {
-          stroke: '#6c7580',
+          stroke: P.fg3,
           font: `10px ${MONO}`,
           size: 38,
           gap: 4,
-          grid: { stroke: '#171b20', width: 1 },
+          grid: { stroke: P.grid, width: 1 },
           ticks: { show: false },
           values: (_u, v) => v.map((x) => (x >= 10 ? x.toFixed(0) : x >= 1 ? x.toFixed(1) : x.toFixed(x < 0.01 ? 3 : 2))),
         },
@@ -100,13 +110,13 @@ export function SpectrumPanel() {
       series: [
         {},
         {
-          stroke: '#d8dee6',
+          stroke: P.trace1,
           width: 1.25,
           points: { show: false },
           fill: (u) => {
             const g = u.ctx.createLinearGradient(0, u.bbox.top, 0, u.bbox.top + u.bbox.height)
-            g.addColorStop(0, 'rgba(216,222,230,0.16)')
-            g.addColorStop(1, 'rgba(216,222,230,0)')
+            g.addColorStop(0, alpha(P.trace1, light ? 0.1 : 0.16))
+            g.addColorStop(1, alpha(P.trace1, 0))
             return g
           },
         },
@@ -133,21 +143,21 @@ export function SpectrumPanel() {
               const xa = u.valToPos(Math.max(band.direct_hz, band.dealiased_hz), 'x', true)
               const xr = left + width
               const yb = top + height - 3 * r
-              ctx.fillStyle = '#3a424c'
+              ctx.fillStyle = P.line3
               ctx.fillRect(left, yb, Math.max(0, xd - left), 3 * r)
               if (band.dealiased_hz > band.direct_hz + 0.05) {
-                ctx.fillStyle = 'rgba(157,140,255,0.38)'
+                ctx.fillStyle = alpha(P.accent, 0.38)
                 ctx.fillRect(xd, yb, Math.max(0, Math.min(xa, xr) - xd), 3 * r)
               } else {
                 // nothing above Nyquist is trustworthy without a tachometer lock
-                ctx.fillStyle = 'rgba(7,8,10,0.45)'
+                ctx.fillStyle = alpha(P.bg0, light ? 0.55 : 0.45)
                 ctx.fillRect(xd, top, Math.max(0, xr - xd), height)
               }
               if (xa < xr) {
-                ctx.fillStyle = 'rgba(7,8,10,0.5)'
+                ctx.fillStyle = alpha(P.bg0, light ? 0.6 : 0.5)
                 ctx.fillRect(xa, top, xr - xa, height)
               }
-              ctx.strokeStyle = '#3a434d'
+              ctx.strokeStyle = P.line3
               ctx.setLineDash([3 * r, 3 * r])
               ctx.lineWidth = r
               ctx.beginPath()
@@ -155,7 +165,7 @@ export function SpectrumPanel() {
               ctx.lineTo(Math.round(xd) + 0.5, top + height)
               ctx.stroke()
               ctx.setLineDash([])
-              ctx.fillStyle = '#6c7580'
+              ctx.fillStyle = P.fg3
               ctx.font = `${9 * r}px ${MONO}`
               ctx.fillText(`fs/2 ${band.direct_hz.toFixed(1)} Hz`, xd + 4 * r, top + height * 0.55)
             }
@@ -163,16 +173,16 @@ export function SpectrumPanel() {
             for (const [i, m] of [...(st.campbell?.modes ?? [])].sort((a, b) => a.f_hz - b.f_hz).entries()) {
               const x0 = u.valToPos(m.f_hz - m.f_err_hz, 'x', true)
               const x1 = u.valToPos(m.f_hz + m.f_err_hz, 'x', true)
-              ctx.fillStyle = 'rgba(157,140,255,0.07)'
+              ctx.fillStyle = alpha(P.accent, light ? 0.08 : 0.07)
               ctx.fillRect(x0, top, Math.max(1, x1 - x0), height)
-              ctx.fillStyle = 'rgba(195,184,255,0.75)'
+              ctx.fillStyle = alpha(P.accent2, 0.8)
               ctx.font = `${9 * r}px ${MONO}`
               ctx.fillText(`M${i + 1}`, (x0 + x1) / 2 - 6 * r, top + height - 4 * r)
             }
             // order cursors at k × running speed
             const f1 = st.telemetry?.speed_hz ?? 0
             if (f1 > 0.8) {
-              ctx.strokeStyle = '#2a3139'
+              ctx.strokeStyle = P.faint
               ctx.setLineDash([2 * r, 3 * r])
               ctx.lineWidth = r
               for (let k = 1; k <= 8; k++) {
@@ -201,24 +211,24 @@ export function SpectrumPanel() {
               for (const b of boxes) if (bx < b[0] + b[2] && bx + tw > b[0] && by < b[1] + b[3] && by + bh > b[1]) by = b[1] + b[3] + 2 * r
               boxes.push([bx, by, tw, bh])
               // leader
-              ctx.strokeStyle = '#454d56'
+              ctx.strokeStyle = P.fg4
               ctx.lineWidth = r
               ctx.beginPath()
               ctx.moveTo(Math.round(x) + 0.5, by + bh)
               ctx.lineTo(Math.round(x) + 0.5, y - 3 * r)
               ctx.stroke()
-              ctx.fillStyle = '#0d0f12'
-              ctx.strokeStyle = aliased ? 'rgba(157,140,255,0.55)' : p.order === 1 ? '#5b6470' : '#323a43'
+              ctx.fillStyle = P.bg1
+              ctx.strokeStyle = aliased ? alpha(P.accent, 0.55) : p.order === 1 ? P.fg3 : P.line3
               if (aliased) ctx.setLineDash([2 * r, 2 * r])
               ctx.beginPath()
               ctx.roundRect(bx, by, tw, bh, 3 * r)
               ctx.fill()
               ctx.stroke()
               ctx.setLineDash([])
-              ctx.fillStyle = '#e7eaee'
+              ctx.fillStyle = P.fg1
               ctx.fillText(label, bx + 5 * r, by + 10.5 * r)
               if (p.corroborated_audio) {
-                ctx.fillStyle = '#a2abb5'
+                ctx.fillStyle = P.fg2
                 drawAudioTick(ctx, bx + tw - 12 * r, by + bh / 2, r)
               }
               // 90% CI whisker on the amplitude
@@ -226,7 +236,7 @@ export function SpectrumPanel() {
                 const y0 = u.valToPos(Math.max(p.amp_ci[0], 0.0031), 'y', true)
                 const y1 = u.valToPos(Math.max(p.amp_ci[1], 0.0031), 'y', true)
                 const xm = Math.round(x) + 0.5
-                ctx.strokeStyle = 'rgba(231,234,238,0.8)'
+                ctx.strokeStyle = alpha(P.fg1, 0.8)
                 ctx.lineWidth = r
                 ctx.beginPath()
                 ctx.moveTo(xm, y0)
@@ -240,8 +250,8 @@ export function SpectrumPanel() {
               if (aliased) {
                 // hollow diamond = recovered by de-aliasing; ghost tick where the camera actually sees it
                 const d = 3.6 * r
-                ctx.fillStyle = '#0d0f12'
-                ctx.strokeStyle = '#c3b8ff'
+                ctx.fillStyle = P.bg1
+                ctx.strokeStyle = P.accent2
                 ctx.lineWidth = 1.25 * r
                 ctx.beginPath()
                 ctx.moveTo(x, y - d)
@@ -253,7 +263,7 @@ export function SpectrumPanel() {
                 ctx.stroke()
                 const xa = u.valToPos(p.f_alias_hz!, 'x', true)
                 const yb = top + height - 3 * r
-                ctx.strokeStyle = 'rgba(157,140,255,0.32)'
+                ctx.strokeStyle = alpha(P.accent, 0.32)
                 ctx.lineWidth = r
                 ctx.setLineDash([2 * r, 2.5 * r])
                 ctx.beginPath()
@@ -261,10 +271,10 @@ export function SpectrumPanel() {
                 ctx.quadraticCurveTo((xa + x) / 2, yb - Math.min(46 * r, Math.abs(x - xa) * 0.35), x, yb)
                 ctx.stroke()
                 ctx.setLineDash([])
-                ctx.fillStyle = 'rgba(195,184,255,0.85)'
+                ctx.fillStyle = alpha(P.accent2, 0.85)
                 ctx.fillRect(Math.round(xa) - 0.5 * r, yb - 5 * r, r, 5 * r)
               } else {
-                ctx.fillStyle = '#e7eaee'
+                ctx.fillStyle = P.fg1
                 ctx.beginPath()
                 ctx.arc(x, y, 2.5 * r, 0, Math.PI * 2)
                 ctx.fill()
@@ -291,7 +301,7 @@ export function SpectrumPanel() {
     }
     const s = specRef.current
     plot.current = new uPlot(opts, s ? [s.f_hz, s.amp] : [[0, 1], [0, 0]], el)
-  }, [size.w, size.h, scale]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [size.w, size.h, scale, theme]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(
     () => () => {
@@ -340,14 +350,14 @@ export function SpectrumPanel() {
               {anyAliased && (
                 <span className="inline-flex items-center gap-1">
                   <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
-                    <path d="M5 1 L9 5 L5 9 L1 5 Z" fill="none" stroke="#c3b8ff" strokeWidth="1.3" />
+                    <path d="M5 1 L9 5 L5 9 L1 5 Z" fill="none" stroke="var(--color-accent-2)" strokeWidth="1.3" />
                   </svg>
                   de-aliased
                 </span>
               )}
               <span className="inline-flex items-center gap-1">
                 <svg width="7" height="10" viewBox="0 0 7 10" aria-hidden>
-                  <path d="M1 1H6M3.5 1V9M1 9H6" stroke="#a2abb5" strokeWidth="1" fill="none" />
+                  <path d="M1 1H6M3.5 1V9M1 9H6" stroke="var(--color-fg-2)" strokeWidth="1" fill="none" />
                 </svg>
                 90% CI
               </span>
@@ -379,8 +389,8 @@ export function SpectrumPanel() {
         </>
       }
     >
-      <div ref={box} className="absolute inset-0 pl-1 pt-1" />
-      {!spec && view === 'spectrum' && <Empty title="No spectrum yet" hint="Spectra stream at ~4 Hz once the virtual sensors are tracking." />}
+      <div ref={box} className={cx('absolute inset-0 pl-1 pt-1 transition-opacity duration-500', spec ? 'opacity-100' : 'opacity-0')} />
+      {!spec && view === 'spectrum' && <Empty title="No spectrum yet" hint="Spectra stream at ~4 Hz once the virtual sensors are tracking." stage="dsp" />}
       {view === 'dealias' && (
         <div className="absolute inset-0 z-10 bg-bg-1">
           <DealiasView channel={ch} />

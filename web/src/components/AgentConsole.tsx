@@ -18,7 +18,7 @@ function ClaimText({ text, claims }: { text: string; claims?: AgentClaim[] }) {
       c.verified ? (
         <Tip
           key={i}
-          className="group/claim relative cursor-help rounded-[2px] decoration-[rgba(162,171,181,.28)] decoration-dotted underline-offset-[3px] transition-colors hover:bg-[var(--ok-dim)] hover:text-fg-1 hover:underline"
+          className="group/claim relative cursor-help rounded-[2px] decoration-fg-2/28 decoration-dotted underline-offset-[3px] transition-colors hover:bg-[var(--ok-dim)] hover:text-fg-1 hover:underline"
           content={
             <span className="flex items-center gap-1.5">
               <Check size={11} className="shrink-0 text-ok" />
@@ -112,7 +112,7 @@ export function EvidenceChips({ d }: { d: DiagnosisEvent }) {
           <button
             key={i}
             onClick={() => open({ title: d.title, evidence: d.evidence, focus: i, source: d.model })}
-            className="num inline-flex h-[20px] items-center gap-1 rounded-[4px] border border-line-2 bg-bg-2 px-1.5 text-[10px] text-fg-2 transition-colors hover:border-[#3a434d] hover:bg-bg-3 hover:text-fg-1"
+            className="num inline-flex h-[20px] items-center gap-1 rounded-[4px] border border-line-2 bg-bg-2 px-1.5 text-[10px] text-fg-2 transition-colors hover:border-line-3 hover:bg-bg-3 hover:text-fg-1"
           >
             {l.icon}
             {l.text}
@@ -278,7 +278,7 @@ export function AgentConsole() {
             e.preventDefault()
             send(text)
           }}
-          className="flex h-8 items-center gap-1 rounded-md border border-line-2 bg-bg-0 pl-2.5 pr-1 focus-within:border-[rgba(157,140,255,.5)]"
+          className="flex h-8 items-center gap-1 rounded-md border border-line-2 bg-bg-0 pl-2.5 pr-1 focus-within:border-accent/50"
         >
           <input
             value={text}
@@ -286,7 +286,7 @@ export function AgentConsole() {
             placeholder="Ask Argonaut, or say “Argonaut, …”"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-fg-1 placeholder:text-fg-4 focus:outline-none"
           />
-          <button type="submit" disabled={!text.trim()} className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-bg-3 text-fg-2 transition-colors hover:bg-accent hover:text-[#0b0a14] disabled:opacity-40">
+          <button type="submit" disabled={!text.trim()} className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-bg-3 text-fg-2 transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-40">
             <ArrowUp size={13} />
           </button>
         </form>

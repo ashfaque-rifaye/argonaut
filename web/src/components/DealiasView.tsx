@@ -103,38 +103,38 @@ export function DealiasView({ channel }: { channel: string | null }) {
               </clipPath>
             </defs>
             {/* fold zones */}
-            <rect x={X(0)} y={M.t} width={X(ny) - X(0)} height={ph} fill="rgba(231,234,238,0.035)" />
+            <rect x={X(0)} y={M.t} width={X(ny) - X(0)} height={ph} fill="color-mix(in srgb, var(--color-fg-1) 3.5%, transparent)" />
             {Array.from({ length: Math.ceil(xMax / fs) }, (_, i) => i + 1).map((n) => {
               const a = Math.max(0, (n - 0.5) * fs)
               const b = Math.min(xMax, (n + 0.5) * fs)
               return (
                 <g key={n}>
-                  {n % 2 === 0 && <rect x={X(a)} y={M.t} width={X(b) - X(a)} height={ph} fill="rgba(231,234,238,0.018)" />}
-                  <line x1={X(a)} x2={X(a)} y1={M.t} y2={M.t + ph} stroke="#1c2127" />
+                  {n % 2 === 0 && <rect x={X(a)} y={M.t} width={X(b) - X(a)} height={ph} fill="color-mix(in srgb, var(--color-fg-1) 1.8%, transparent)" />}
+                  <line x1={X(a)} x2={X(a)} y1={M.t} y2={M.t + ph} stroke="var(--color-line-1)" />
                   {X(b) - X(a) > 40 && (
-                    <text x={(X(a) + X(b)) / 2} y={M.t + ph - 5} textAnchor="middle" fontSize={9} fill="#454d56" className="num">
+                    <text x={(X(a) + X(b)) / 2} y={M.t + ph - 5} textAnchor="middle" fontSize={9} fill="var(--color-fg-4)" className="num">
                       fold {n}
                     </text>
                   )}
                 </g>
               )
             })}
-            <text x={(X(0) + X(ny)) / 2} y={M.t + ph - 5} textAnchor="middle" fontSize={9} fill="#6c7580" className="num">
+            <text x={(X(0) + X(ny)) / 2} y={M.t + ph - 5} textAnchor="middle" fontSize={9} fill="var(--color-fg-3)" className="num">
               direct
             </text>
             {/* axes */}
-            <line x1={M.l} x2={M.l + pw} y1={M.t + ph + 0.5} y2={M.t + ph + 0.5} stroke="#283038" />
-            <line x1={M.l - 0.5} x2={M.l - 0.5} y1={M.t} y2={M.t + ph} stroke="#283038" />
-            <line x1={M.l} x2={M.l + pw} y1={M.t + 0.5} y2={M.t + 0.5} stroke="#1c2127" strokeDasharray="2 3" />
+            <line x1={M.l} x2={M.l + pw} y1={M.t + ph + 0.5} y2={M.t + ph + 0.5} stroke="var(--color-line-2)" />
+            <line x1={M.l - 0.5} x2={M.l - 0.5} y1={M.t} y2={M.t + ph} stroke="var(--color-line-2)" />
+            <line x1={M.l} x2={M.l + pw} y1={M.t + 0.5} y2={M.t + 0.5} stroke="var(--color-line-1)" strokeDasharray="2 3" />
             {!yLabels.some((l) => Math.abs(l.y - (M.t + 3.5)) < 11) && (
-              <text x={M.l - 6} y={M.t + 3.5} textAnchor="end" fontSize={9} fill="#454d56" className="num">
+              <text x={M.l - 6} y={M.t + 3.5} textAnchor="end" fontSize={9} fill="var(--color-fg-4)" className="num">
                 {ny.toFixed(0)}
               </text>
             )}
-            <text x={M.l - 6} y={M.t + ph + 3.5} textAnchor="end" fontSize={9} fill="#454d56" className="num">
+            <text x={M.l - 6} y={M.t + ph + 3.5} textAnchor="end" fontSize={9} fill="var(--color-fg-4)" className="num">
               0
             </text>
-            <text x={M.l - 6} y={M.t - 9} textAnchor="end" fontSize={8.5} fill="#6c7580" className="num">
+            <text x={M.l - 6} y={M.t - 9} textAnchor="end" fontSize={8.5} fill="var(--color-fg-3)" className="num">
               seen Hz
             </text>
             {Array.from({ length: nSeg }, (_, k) => (k + 1) * ny)
@@ -144,33 +144,33 @@ export function DealiasView({ channel }: { channel: string | null }) {
                 const isFs = Math.abs(v / fs - Math.round(v / fs)) < 1e-6
                 return (
                   <g key={v}>
-                    <line x1={X(v)} x2={X(v)} y1={M.t + ph} y2={M.t + ph + 3} stroke="#283038" />
+                    <line x1={X(v)} x2={X(v)} y1={M.t + ph} y2={M.t + ph + 3} stroke="var(--color-line-2)" />
                     {!near && (
-                      <text x={X(v)} y={M.t + ph + 13} textAnchor="middle" fontSize={9} fill="#454d56" className="num">
+                      <text x={X(v)} y={M.t + ph + 13} textAnchor="middle" fontSize={9} fill="var(--color-fg-4)" className="num">
                         {isFs ? `${Math.round(v / fs) === 1 ? '' : Math.round(v / fs)}fs ${v}` : v}
                       </text>
                     )}
                   </g>
                 )
               })}
-            <text x={M.l + pw} y={M.t + ph + 23} textAnchor="end" fontSize={8.5} fill="#6c7580" className="num">
+            <text x={M.l + pw} y={M.t + ph + 23} textAnchor="end" fontSize={8.5} fill="var(--color-fg-3)" className="num">
               true frequency · Hz
             </text>
 
             <g clipPath="url(#da-clip)">
               {/* order lines from the mic tachometer */}
               {orders.map((k) => (
-                <line key={k} x1={X(k * d.speed_hz_audio)} x2={X(k * d.speed_hz_audio)} y1={M.t} y2={M.t + ph} stroke="rgba(157,140,255,0.28)" strokeDasharray="3 3" />
+                <line key={k} x1={X(k * d.speed_hz_audio)} x2={X(k * d.speed_hz_audio)} y1={M.t} y2={M.t + ph} stroke="color-mix(in srgb, var(--color-accent) 28%, transparent)" strokeDasharray="3 3" />
               ))}
               {/* the fold line */}
-              <path d={tri} fill="none" stroke="#7b8693" strokeWidth={1.25} strokeLinejoin="round" />
+              <path d={tri} fill="none" stroke="var(--color-trace-2)" strokeWidth={1.25} strokeLinejoin="round" />
               {peaks.map((p) => (
                 <g key={`h${p.order}`}>
-                  <line x1={M.l} x2={X(p.f_true_hz)} y1={Y(p.f_alias_hz)} y2={Y(p.f_alias_hz)} stroke="rgba(231,234,238,0.32)" strokeDasharray="2 3" />
+                  <line x1={M.l} x2={X(p.f_true_hz)} y1={Y(p.f_alias_hz)} y2={Y(p.f_alias_hz)} stroke="color-mix(in srgb, var(--color-fg-1) 32%, transparent)" strokeDasharray="2 3" />
                   {candidates(p).map((x, i) => (
-                    <circle key={i} cx={X(x)} cy={Y(p.f_alias_hz)} r={p === primary ? 3 : 2.25} fill="#0d0f12" stroke={p === primary ? '#7b8693' : '#323a43'} strokeWidth={1} />
+                    <circle key={i} cx={X(x)} cy={Y(p.f_alias_hz)} r={p === primary ? 3 : 2.25} fill="var(--color-bg-1)" stroke={p === primary ? 'var(--color-trace-2)' : 'var(--color-line-3)'} strokeWidth={1} />
                   ))}
-                  <line x1={X(p.f_true_hz)} x2={X(p.f_true_hz)} y1={Y(p.f_alias_hz)} y2={M.t + ph} stroke="rgba(195,184,255,0.7)" strokeDasharray="2 2" />
+                  <line x1={X(p.f_true_hz)} x2={X(p.f_true_hz)} y1={Y(p.f_alias_hz)} y2={M.t + ph} stroke="color-mix(in srgb, var(--color-accent-2) 70%, transparent)" strokeDasharray="2 2" />
                 </g>
               ))}
             </g>
@@ -180,7 +180,7 @@ export function DealiasView({ channel }: { channel: string | null }) {
               const prev = i ? X(orders[i - 1] * d.speed_hz_audio) : -99
               return (
                 x - prev > 16 && (
-                  <text key={k} x={x} y={M.t - 6} textAnchor="middle" fontSize={9.5} fill={peaks.some((p) => p.order === k) ? '#c3b8ff' : 'rgba(195,184,255,.45)'} className="num" fontWeight={600}>
+                  <text key={k} x={x} y={M.t - 6} textAnchor="middle" fontSize={9.5} fill={peaks.some((p) => p.order === k) ? 'var(--color-accent-2)' : 'color-mix(in srgb, var(--color-accent-2) 45%, transparent)'} className="num" fontWeight={600}>
                     {k}×
                   </text>
                 )
@@ -188,10 +188,10 @@ export function DealiasView({ channel }: { channel: string | null }) {
             })}
             {/* observed (camera) peaks on the y axis */}
             {peaks.map((p) => (
-              <path key={`o${p.order}`} d={`M${M.l - 1},${Y(p.f_alias_hz) - 4} L${M.l + 5},${Y(p.f_alias_hz)} L${M.l - 1},${Y(p.f_alias_hz) + 4} Z`} fill="#e7eaee" />
+              <path key={`o${p.order}`} d={`M${M.l - 1},${Y(p.f_alias_hz) - 4} L${M.l + 5},${Y(p.f_alias_hz)} L${M.l - 1},${Y(p.f_alias_hz) + 4} Z`} fill="var(--color-fg-1)" />
             ))}
             {yLabels.map((l) => (
-              <text key={l.v} x={M.l - 6} y={l.y} textAnchor="end" fontSize={10} fill="#e7eaee" className="num">
+              <text key={l.v} x={M.l - 6} y={l.y} textAnchor="end" fontSize={10} fill="var(--color-fg-1)" className="num">
                 {l.v.toFixed(2)}
               </text>
             ))}
@@ -201,8 +201,8 @@ export function DealiasView({ channel }: { channel: string | null }) {
               const y = Y(p.f_alias_hz)
               return (
                 <g key={`c${p.order}`}>
-                  <rect x={x - 4.5} y={y - 4.5} width={9} height={9} transform={`rotate(45 ${x} ${y})`} fill="#9d8cff" stroke="#0d0f12" strokeWidth={1.5} />
-                  <text x={x} y={M.t + ph + 13} textAnchor="middle" fontSize={9.5} fill="#c3b8ff" className="num" fontWeight={600}>
+                  <rect x={x - 4.5} y={y - 4.5} width={9} height={9} transform={`rotate(45 ${x} ${y})`} fill="var(--color-accent)" stroke="var(--color-bg-1)" strokeWidth={1.5} />
+                  <text x={x} y={M.t + ph + 13} textAnchor="middle" fontSize={9.5} fill="var(--color-accent-2)" className="num" fontWeight={600}>
                     {p.f_true_hz.toFixed(2)}
                   </text>
                 </g>
@@ -210,8 +210,8 @@ export function DealiasView({ channel }: { channel: string | null }) {
             })}
             {boxes.map((b) => (
               <g key={`b${b.p.order}`}>
-                <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill="#0d0f12" stroke="rgba(157,140,255,0.45)" />
-                <text x={b.x + 6} y={b.y + 11} fontSize={9.5} fill="#e7eaee" className="num">
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill="var(--color-bg-1)" stroke="color-mix(in srgb, var(--color-accent) 45%, transparent)" />
+                <text x={b.x + 6} y={b.y + 11} fontSize={9.5} fill="var(--color-fg-1)" className="num">
                   {b.text}
                 </text>
               </g>

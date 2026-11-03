@@ -10,10 +10,10 @@ export function isoPos(v: number) {
 }
 
 const ZONES = [
-  { z: 'A', fill: '#20262d' },
-  { z: 'B', fill: '#2a3139' },
-  { z: 'C', fill: '#3a2f1c' },
-  { z: 'D', fill: '#3d1d1f' },
+  { z: 'A', fill: 'var(--color-iso-a)' },
+  { z: 'B', fill: 'var(--color-iso-b)' },
+  { z: 'C', fill: 'var(--color-iso-c)' },
+  { z: 'D', fill: 'var(--color-iso-d)' },
 ]
 
 export function IsoBar({
@@ -35,18 +35,18 @@ export function IsoBar({
   const ptrColor = zoneIdx === 3 ? 'var(--color-alarm)' : zoneIdx === 2 ? 'var(--color-warn)' : 'var(--color-fg-1)'
   return (
     <div className="relative w-full select-none" style={{ paddingTop: 7 }}>
-      <div className="relative flex w-full overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_#283038]" style={{ height }}>
+      <div className="relative flex w-full overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_var(--color-line-2)]" style={{ height }}>
         {ZONES.map((z, i) => (
-          <div key={z.z} className="relative h-full flex-1" style={{ background: z.fill, borderLeft: i ? '1px solid #07080a' : undefined }}>
-            {labels && <span className="num absolute inset-0 flex items-center justify-center text-[8.5px] font-semibold text-[#6c7580]">{z.z}</span>}
+          <div key={z.z} className="relative h-full flex-1" style={{ background: z.fill, borderLeft: i ? '1px solid var(--color-bg-0)' : undefined }}>
+            {labels && <span className="num absolute inset-0 flex items-center justify-center text-[8.5px] font-semibold text-fg-3">{z.z}</span>}
           </div>
         ))}
         {/* normal operating band (A–B) indicator */}
-        <div className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-1/2 bg-[#4a525c]" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-1/2 bg-fg-4" />
       </div>
       {ci && value != null && (
         <div
-          className="pointer-events-none absolute border-x border-[rgba(231,234,238,.75)] bg-[rgba(231,234,238,.16)] transition-[left,width] duration-100 ease-linear"
+          className="pointer-events-none absolute border-x border-fg-1/75 bg-fg-1/16 transition-[left,width] duration-100 ease-linear"
           style={{ top: 7, height, left: `${isoPos(ci[0]) * 100}%`, width: `${Math.max(0.3, (isoPos(ci[1]) - isoPos(ci[0])) * 100)}%` }}
           title={`90% CI ${ci[0].toFixed(2)}–${ci[1].toFixed(2)} mm/s`}
         />
@@ -59,7 +59,7 @@ export function IsoBar({
           <svg width="10" height="7" viewBox="0 0 10 7" className="-translate-x-1/2" style={{ display: 'block' }}>
             <path d="M0 0 H10 L5 7 Z" fill={ptrColor} />
           </svg>
-          <div className="-translate-x-1/2" style={{ width: 2, height, background: ptrColor, marginLeft: 0, boxShadow: '0 0 0 1px #07080a' }} />
+          <div className="-translate-x-1/2" style={{ width: 2, height, background: ptrColor, marginLeft: 0, boxShadow: '0 0 0 1px var(--color-bg-0)' }} />
         </div>
       )}
       {labels && (

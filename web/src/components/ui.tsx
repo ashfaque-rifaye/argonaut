@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import type { PipelineStage } from '../lib/protocol'
+import { StageWait } from './StageWait'
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
@@ -37,10 +39,10 @@ export type Tone = 'neutral' | 'accent' | 'warn' | 'alarm' | 'ok' | 'muted'
 const toneCls: Record<Tone, string> = {
   neutral: 'text-fg-2 border-line-2 bg-bg-2',
   muted: 'text-fg-3 border-line-1 bg-transparent',
-  accent: 'text-accent-2 border-[rgba(157,140,255,.35)] bg-[var(--accent-dim)]',
-  warn: 'text-warn border-[rgba(240,166,58,.35)] bg-[var(--warn-dim)]',
-  alarm: 'text-alarm border-[rgba(242,72,75,.4)] bg-[var(--alarm-dim)]',
-  ok: 'text-ok border-[rgba(60,191,138,.35)] bg-[var(--ok-dim)]',
+  accent: 'text-accent-2 border-accent/35 bg-[var(--accent-dim)]',
+  warn: 'text-warn border-warn/35 bg-[var(--warn-dim)]',
+  alarm: 'text-alarm border-alarm/40 bg-[var(--alarm-dim)]',
+  ok: 'text-ok border-ok/35 bg-[var(--ok-dim)]',
 }
 
 export function Chip({ tone = 'neutral', children, className, title, mono }: { tone?: Tone; children: ReactNode; className?: string; title?: string; mono?: boolean }) {
@@ -56,8 +58,8 @@ const btnCls: Record<BtnVariant, string> = {
   ghost: 'text-fg-2 hover:text-fg-1 hover:bg-bg-3 border-transparent',
   subtle: 'text-fg-2 bg-bg-2 hover:bg-bg-3 hover:text-fg-1 border-line-2',
   outline: 'text-fg-1 bg-transparent hover:bg-bg-3 border-line-2',
-  accent: 'text-[#0b0a14] bg-accent hover:bg-accent-2 border-transparent font-semibold shadow-[0_0_0_1px_rgba(157,140,255,.4),0_6px_24px_-8px_rgba(157,140,255,.6)]',
-  danger: 'text-alarm bg-transparent hover:bg-[var(--alarm-dim)] border-[rgba(242,72,75,.35)]',
+  accent: 'text-on-accent bg-accent hover:bg-accent-2 border-transparent font-semibold shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-accent)_40%,transparent),0_6px_24px_-8px_color-mix(in_srgb,var(--color-accent)_60%,transparent)]',
+  danger: 'text-alarm bg-transparent hover:bg-[var(--alarm-dim)] border-alarm/35',
 }
 
 export function Btn({
@@ -72,7 +74,7 @@ export function Btn({
     <button
       {...rest}
       className={cx(
-        'inline-flex select-none items-center justify-center rounded-md border font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-md border font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40',
         sz,
         btnCls[variant],
         className,
@@ -93,7 +95,7 @@ export function Seg<T extends string | number>({ value, options, onChange, class
           onClick={() => onChange(o.v)}
           className={cx(
             'h-[18px] rounded-[4px] px-1.5 text-[10.5px] font-medium transition-colors',
-            o.v === value ? 'bg-bg-4 text-fg-1 shadow-[inset_0_0_0_1px_#323a43]' : 'text-fg-3 hover:text-fg-2',
+            o.v === value ? 'bg-bg-4 text-fg-1 shadow-[inset_0_0_0_1px_var(--color-line-3)]' : 'text-fg-3 hover:text-fg-2',
           )}
         >
           {o.label}
@@ -131,12 +133,45 @@ export function Readout({ value, unit, className, big }: { value: ReactNode; uni
   )
 }
 
-export function Empty({ icon, title, hint }: { icon?: ReactNode; title: string; hint?: ReactNode }) {
+/**
+ * Empty / loading state. A faint skeleton of the chart that will appear (so the panel never looks
+ * broken), the stage that will fill it (live from the model rail), and one line of guidance.
+ */
+export function Empty({ icon, title, hint, stage, skeleton = 'chart' }: { icon?: ReactNode; title: string; hint?: ReactNode; stage?: PipelineStage; skeleton?: 'chart' | 'heat' | 'table' | 'none' }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-6 text-center">
-      {icon && <div className="mb-1 text-fg-4">{icon}</div>}
-      <div className="text-[12px] font-medium text-fg-3">{title}</div>
-      {hint && <div className="max-w-[280px] text-[11px] leading-relaxed text-fg-4">{hint}</div>}
+    <div className="anim-in absolute inset-0 overflow-hidden">
+      {skeleton !== 'none' && (
+        <div className="pointer-events-none absolute inset-3 opacity-60" aria-hidden>
+          {skeleton === 'chart' && (
+            <svg className="skeleton-svg h-full w-full" preserveAspectRatio="none" viewBox="0 0 400 160">
+              {[30, 70, 110, 150].map((y) => (
+                <line key={y} x1="0" x2="400" y1={y} y2={y} stroke="var(--color-grid)" />
+              ))}
+              <path d="M0 150 C40 148 60 120 80 140 S120 60 140 130 S190 146 220 120 S260 30 280 128 S340 148 400 142" stroke="var(--color-line-2)" strokeWidth="1.5" fill="none" vectorEffect="non-scaling-stroke" />
+            </svg>
+          )}
+          {skeleton === 'heat' && <div className="skeleton h-full w-full rounded-[3px]" />}
+          {skeleton === 'table' && (
+            <div className="flex h-full flex-col justify-center gap-2">
+              {[0.92, 0.75, 0.84, 0.6].map((w, i) => (
+                <div key={i} className="skeleton h-2.5 rounded-[2px]" style={{ width: `${w * 100}%` }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-6 text-center">
+        <div className="flex flex-col items-center gap-1.5 rounded-lg bg-bg-1/80 px-4 py-3 backdrop-blur-[2px]">
+          {icon && <div className="mb-1 text-fg-4">{icon}</div>}
+          <div className="text-[12px] font-medium text-fg-2">{title}</div>
+          {hint && <div className="max-w-[300px] text-[11px] leading-relaxed text-fg-3">{hint}</div>}
+          {stage && (
+            <div className="mt-1.5">
+              <StageWait stage={stage} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -172,7 +207,7 @@ export function Tip({ content, children, className }: { content: ReactNode; chil
           <div
             ref={tip}
             role="tooltip"
-            className="pointer-events-none invisible fixed z-[100] max-w-[320px] rounded-[5px] border border-line-2 bg-bg-2 px-2 py-1 text-[10.5px] leading-snug text-fg-2 shadow-[0_8px_24px_-8px_rgba(0,0,0,.8)]"
+            className="pointer-events-none invisible fixed z-[100] max-w-[320px] rounded-[5px] border border-line-2 bg-bg-2 px-2 py-1 text-[10.5px] leading-snug text-fg-2 shadow-[0_8px_24px_-8px_color-mix(in_srgb,var(--color-shadow)_80%,transparent)]"
             style={{ left: at.x, top: at.below ? at.y + 6 : at.y - 6, transform: at.below ? undefined : 'translateY(-100%)' }}
           >
             {content}
@@ -181,4 +216,10 @@ export function Tip({ content, children, className }: { content: ReactNode; chil
         )}
     </span>
   )
+}
+
+/** Tiny dot that flashes each time `tick` changes: the value next to it is streaming. */
+export function LiveTick({ tick, className, title = 'streaming' }: { tick: unknown; className?: string; title?: string }) {
+  if (tick == null) return <span className={cx('inline-block h-[5px] w-[5px] shrink-0 rounded-full bg-fg-4', className)} title="no data" />
+  return <span key={String(tick)} title={title} className={cx('live-tick inline-block h-[5px] w-[5px] shrink-0 rounded-full bg-accent', className)} />
 }

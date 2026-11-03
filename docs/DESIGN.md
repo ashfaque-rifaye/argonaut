@@ -201,3 +201,53 @@ Sections in order: hero, problem (IEA 4E figures with source), how it works (fiv
 8. **`verification.p_value`** below 0.0001 is shown as `< 0.0001`.
 9. **Envelope pre-fill** is the feasible band that contains the proposed speed (or else the first band), with a max step of 150 rpm.
 10. **`?mock=1&autoplay=1`** now also opens the Closed loop tab 6 s after verification and approves the pre-filled envelope 7 s later. The whole loop, including about 6 RTO iterations to convergence, therefore plays unattended.
+
+
+---
+
+## v3: themes, media-backed story, motion, console polish
+
+### Copy
+
+The product no longer says "your camera" or "phone". It reads machine physics from **any feed that can see and hear the machine**: CCTV, inspection or handheld cameras, drones, with no sensors bolted on. Hero: **"Machines, measured by sight and sound."** Sub-line: "Argonaut identifies a rotating machine's dynamics from ordinary video and sound, then finds the speed that runs it best, verified in closed loop." "Camera frame rate" stays where it is technically needed (de-aliasing, Nyquist). The sweep covered the landing page, page title/meta, console tooltips (Live view source: "Device camera (webcam, USB or capture card)") and the simulator's coach line.
+
+### Themes (dark + light)
+
+- **Tokens.** `web/src/index.css` defines every colour once as `--color-*` in `@theme static` (dark values) and overrides them under `:root[data-theme="light"]`. Tailwind utilities, opacity modifiers (`border-accent/35`) and inline SVG (`fill="var(--color-fg-3)"`, `color-mix(in srgb, var(--color-alarm) 40%, transparent)`) all follow the theme. New tokens: `line-3`, `on-accent`, `warn-2`/`warn-bg`, `alarm-2`/`alarm-bg`, `iso-a…d`, `shadow`, `page` (landing background), `well` (video).
+- **Canvas / uPlot.** `lib/theme.ts` mirrors the tokens as hex (`PALETTES`, `pal()`, `alpha()`), because canvas cannot read CSS variables. The spectrum (uPlot axes, series, every draw-hook mark), the waterfall and the hero spectrogram rebuild on theme change.
+- **Colormaps.** Dark keeps **inferno**. Light uses **paper-violet**: near-white → argon violet → ink, monotonic in lightness (L* ≈ 98 → 12), so the noise floor melts into the panel and peaks read as ink (`lib/colormap.ts`, `colormapFor(theme)`; the waterfall legend and its tooltip follow).
+- **Light is an ISA-101 light-grey HMI, not an inversion.** Bezel/seams `#DDE1E6`, panels `#F7F8FA`, ink text `#11161C`. Every semantic hue is darkened until text passes WCAG AA on the panel: accent `#6550E0` (5.2:1), accent-2 `#4E3BC4`, warn `#A35C00` (4.8:1), alarm `#CF2A2F` (4.9:1), ok `#0F7F53` (4.7:1); fg-3 `#525B66` (6.3:1), fg-4 `#6D7580` (≈4.3:1, reserved for tertiary labels). Dark fg-4 was lifted from `#454D56` to `#4F5862` for legibility.
+- **Video stays graphite.** The live-view well carries `.scope-dark` (dark tokens re-declared locally), so HUD badges, mask labels and the coach toast keep the "opaque graphite chip over footage" rule in both themes.
+- **Toggle.** Sun/moon `ThemeToggle` in both headers; `T` in the console. Default follows `prefers-color-scheme` (and keeps following it until the user chooses); the choice persists in `localStorage['argonaut-theme']` (wrapped in try/catch). An inline script in `index.html` sets `data-theme` before first paint (no flash), and transitions are suppressed for one frame during a switch (`.theme-switching`) so it is a clean cut.
+
+### Landing page
+
+- **Nav:** sticky, section-aware (active link gets a pill), a 1 px accent scroll-progress line (rAF-throttled `scaleX`), theme toggle.
+- **Hero:** staggered blur-up entrance. Background = `<Media name="hero">` (16:9 muted loop). When the footage is ready the live spectrogram crossfades (1.6 s) into a 40% blended overlay masked to the right half (`screen` in dark, `multiply` in light). Without footage the procedural spectrogram is the hero, as before. Feed chips: CCTV · Inspection cameras · Handheld · Drones.
+- **How it works:** five media cards (2-up, 16:9). Each = `<Media>` layer (image or loop, `object-fit: cover`, lazy, fades in, slow hover zoom) + floor scrim + the console's own overlays, animated when 35% visible: SAM masks stroke-draw with a one-shot segmentation sweep and staggered chips (Sense); camera samples pop along the true waveform, then the dashed alias and the unfolded 24.68 Hz (Measure); Campbell rays draw, crossings pop and pulse (Identify); the objective curve traces, the NOW→proposal arrow draws, the diamond pops (Optimise); before/after whiskers, the twin's prediction diamond, the arrow and the significance chip (Prove). Geometry lives in a 1600×900 viewBox (the card is locked to 16:9); labels are HTML in % so they stay legible at 390 px; secondary chips hide below `sm`. Sense masks are calibrated per theme (`SENSE` in `landing/Stages.tsx`; the dark still is mirrored).
+- **Motion system** (`landing/motion.tsx` + `index.css`): `Reveal` (IntersectionObserver, opacity/transform only, staggered with `--d`), `CountUp` (ease-out-quart; the final value is rendered invisibly underneath to reserve its width, so there is no reflow), overlay classes `ov-draw / ov-fill / ov-fade / ov-pop / ov-ring / ov-sweep`. Everything is compositor-only; `prefers-reduced-motion` shows final states and stills.
+- **Results:** count-ups on every headline figure; before/after bars grow from the left.
+
+### `<Media>` and the asset contract
+
+`landing/Media.tsx` reads `web/public/media/manifest.json` (`{ dark: { sense: ["sense.mp4","sense.webp"], … }, light: {…} }`). Candidates are HEAD-probed once and accepted only with an `image/*` or `video/*` content type, so an SPA fallback page never counts as media. The first hit wins: a video plays muted, looped and inline, only while on screen; an image fades in. If the theme has no asset the other theme's is used; if neither exists, the gradient + hairline-grid fallback stays and the overlay still animates. Reduced motion: stills only (`<name>.webp` or `<name>-poster`).
+
+| File (per theme: `web/public/media/{dark,light}/`) | Format | Size / ratio | Composition |
+|---|---|---|---|
+| `hero.mp4` (+ `hero-poster.webp`) | H.264 MP4, muted, 6–12 s seamless loop, ≤ 4 MB | 1920×1080, 16:9 | Subject in the right 55%; left 40% calm (dark in dark, bright in light) for the headline |
+| `sense.webp` / `.mp4` | WebP q≈80 (≤ 200 KB) or short loop | 1376×768 (≈16:9) | Motor-pump skid on a baseplate; a plain static wall or column on the far left |
+| `measure.webp` | same | same | Close-up of a bearing housing / fan guard near the centre; lower 30% calm for the waveform band |
+| `identify.webp` | same | same | Fan or skid on a steel stand in the right half; left half calm for the chart panel |
+| `optimise.webp` | same | same | VFD / MCC cabinets in the right half; left half calm |
+| `prove.webp` | same | same | Machine running steady or an operator with a tablet in the right half; left half calm |
+
+Avoid watermarks and baked-in text in the lower-right corner; chips and panels sit at the top corners and bottom-left.
+
+### Console
+
+- **Header:** the logo links back to the overview; ThemeToggle and a keyboard-shortcut button; the session id moved into the connection tooltip; command labels appear at ≥ 1760 px (icons with tooltips below), so nothing wraps at 1440–1920.
+- **Keyboard:** `T` theme, `1–5` focus Live view / Spectrum / Campbell / Optimizer proposal / Closed loop (the five landing stages; the panel scrolls into view and gets a 1.4 s accent bezel), `?` help overlay, `Esc` closes it. Keys are ignored while typing.
+- **Live pulse:** a 5 px violet dot beside Shaft speed and Overall velocity flashes on every telemetry message (`LiveTick`). Values themselves still never tween.
+- **Loading states:** `Empty` draws a faint skeleton of the chart to come (line, heat or table) under a frosted card, with the **model-rail chip of the stage that will fill it** (`StageWait`: icon, model, live task, running scan line). Spectrum and waterfall fade in on first data; a new proposal fades in.
+- **Live view:** a new SAM result (different regions, or regions that moved more than ~24 px) replays the masks' stroke-draw (staggered 110 ms), the fill fade and the label chips. The video stays `object-contain`, unfiltered.
+- **Shipped media (Google Flow):** `hero.mp4` (1280×720, 24 fps, 8 s, H.264) + `hero-poster.webp`, and the five 1376×768 stage stills, per theme; `manifest.json` points at exactly these files. The hero clip does not loop by itself, so `<Media loopFade={0.9}>` runs two decoders and crossfades the last 0.9 s into a restart underneath (`CrossfadeLoop`), with no dip to the background. It is scaled 1.12× from the left so the generator's corner watermark falls outside the frame. The hero never borrows the other theme's clip (`crossTheme={false}`); the procedural spectrogram is its fallback.

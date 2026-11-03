@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { INFERNO } from '../lib/colormap'
+import { colormapFor } from '../lib/colormap'
+import { alpha, PALETTES, useTheme } from '../lib/theme'
 
 /**
  * Procedural spectrogram of a 5-blade fan cycling run → coast-down → run-up, drawn live.
@@ -49,6 +50,7 @@ const rnd = () => {
 export function HeroSpectrogram({ className }: { className?: string }) {
   const base = useRef<HTMLCanvasElement>(null)
   const over = useRef<HTMLCanvasElement>(null)
+  const theme = useTheme()
 
   useEffect(() => {
     const c = base.current!
@@ -56,6 +58,9 @@ export function HeroSpectrogram({ className }: { className?: string }) {
     const g = c.getContext('2d', { alpha: false })!
     const go = o.getContext('2d')!
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const CM = colormapFor(theme)
+    const P = PALETTES[theme]
+    const light = theme === 'light'
     let raf = 0
     let w = 0
     let h = 0
@@ -90,9 +95,9 @@ export function HeroSpectrogram({ className }: { className?: string }) {
           const idx = ((i * dpr + y) * col!.width) * 4
           for (let x = 0; x < col!.width; x++) {
             const j = idx + x * 4
-            d[j] = INFERNO[k]
-            d[j + 1] = INFERNO[k + 1]
-            d[j + 2] = INFERNO[k + 2]
+            d[j] = CM[k]
+            d[j + 1] = CM[k + 1]
+            d[j + 2] = CM[k + 2]
             d[j + 3] = 255
           }
         }
@@ -109,7 +114,7 @@ export function HeroSpectrogram({ className }: { className?: string }) {
       }
       rows = Math.max(2, Math.floor(c.height / dpr))
       col = g.createImageData(dpr, rows * dpr)
-      g.fillStyle = '#000004'
+      g.fillStyle = light ? '#fbfbfd' : '#000004'
       g.fillRect(0, 0, c.width, c.height)
       // pre-fill the visible history so the first frame is already "live"
       const cols = Math.ceil(w)
@@ -133,12 +138,12 @@ export function HeroSpectrogram({ className }: { className?: string }) {
       go.lineWidth = dpr
       for (const m of MODES) {
         const y = Math.round(Y(m.f)) + 0.5
-        go.strokeStyle = 'rgba(231,234,238,0.16)'
+        go.strokeStyle = alpha(P.fg1, light ? 0.22 : 0.16)
         go.beginPath()
         go.moveTo(x0, y)
         go.lineTo(o.width - 120 * dpr, y)
         go.stroke()
-        go.fillStyle = 'rgba(162,171,181,0.55)'
+        go.fillStyle = alpha(P.fg2, light ? 0.8 : 0.55)
         go.font = fmono(10)
         if (!narrow) go.fillText(m.label, x0 + 6 * dpr, y - 5 * dpr)
       }
@@ -156,19 +161,19 @@ export function HeroSpectrogram({ className }: { className?: string }) {
         const txt = `${ord.label} ${fk.toFixed(1)} Hz`
         go.font = fmono(10.5, 600)
         const tw = go.measureText(txt).width + 12 * dpr
-        go.fillStyle = 'rgba(13,15,18,0.86)'
-        go.strokeStyle = ord.k === 1 ? 'rgba(195,184,255,0.7)' : 'rgba(108,117,128,0.6)'
+        go.fillStyle = alpha(P.bg1, 0.86)
+        go.strokeStyle = ord.k === 1 ? alpha(P.accent2, 0.7) : alpha(P.fg3, 0.6)
         go.beginPath()
         go.roundRect(xr - tw, y - 9 * dpr, tw, 18 * dpr, 4 * dpr)
         go.fill()
         go.stroke()
-        go.fillStyle = ord.k === 1 ? '#c3b8ff' : '#e7eaee'
+        go.fillStyle = ord.k === 1 ? P.accent2 : P.fg1
         go.fillText(txt, xr - tw + 6 * dpr, y + 4 * dpr)
       }
       // frequency axis
       if (!narrow) {
         go.font = fmono(9.5)
-        go.fillStyle = 'rgba(108,117,128,0.8)'
+        go.fillStyle = alpha(P.fg3, 0.8)
         for (const f of [30, 60, 90, 120]) go.fillText(`${f}`, x0 - 24 * dpr, Y(f) + 4 * dpr)
         go.fillText('Hz', x0 - 24 * dpr, Y(F_MAX) + 16 * dpr)
       }
@@ -213,7 +218,7 @@ export function HeroSpectrogram({ className }: { className?: string }) {
       ro.disconnect()
       document.removeEventListener('visibilitychange', vis)
     }
-  }, [])
+  }, [theme])
 
   return (
     <div className={className} aria-hidden>

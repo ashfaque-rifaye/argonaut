@@ -1,6 +1,7 @@
 import { StrictMode, lazy, Suspense, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './lib/theme'
 import { redirectLegacy, usePath } from './lib/router'
 import { Landing } from './landing/Landing'
 
@@ -13,7 +14,7 @@ function Root() {
   const path = usePath()
   const isConsole = path.replace(/\/+$/, '') === '/console'
   useEffect(() => {
-    document.title = isConsole ? 'Argonaut · Control Room' : 'Argonaut · Your camera is a vibration lab'
+    document.title = isConsole ? 'Argonaut · Control Room' : 'Argonaut · Machines, measured by sight and sound'
   }, [isConsole])
   return isConsole ? (
     <Suspense fallback={<div className="h-screen bg-bg-0" />}>

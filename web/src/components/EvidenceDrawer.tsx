@@ -29,7 +29,7 @@ function PeakCard({ e }: { e: EvidenceSpectrumPeak }) {
   return (
     <div>
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="h-2 w-2 rounded-[2px]" style={{ background: sensor?.color ?? '#6c7580' }} />
+        <span className="h-2 w-2 rounded-[2px]" style={{ background: sensor?.color ?? 'var(--color-fg-3)' }} />
         <span className="text-[12px] text-fg-2">{sensor?.label ?? e.channel}</span>
         <span className="num ml-auto text-[18px] text-fg-1">
           {e.f_hz.toFixed(2)}
@@ -38,14 +38,14 @@ function PeakCard({ e }: { e: EvidenceSpectrumPeak }) {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full rounded-[4px] border border-line-1 bg-bg-0">
         {[0.25, 0.5, 0.75].map((g) => (
-          <line key={g} x1={0} x2={W} y1={(H - 14) * g} y2={(H - 14) * g} stroke="#171b20" />
+          <line key={g} x1={0} x2={W} y1={(H - 14) * g} y2={(H - 14) * g} stroke="var(--color-grid)" />
         ))}
-        <rect x={X(e.f_hz) - 6} y={0} width={12} height={H - 14} fill="rgba(157,140,255,.10)" />
-        <path d={`${d}L${W},${H - 14}L0,${H - 14}Z`} fill="rgba(216,222,230,.08)" />
-        <path d={d} fill="none" stroke="#d8dee6" strokeWidth={1.25} />
-        <line x1={X(e.f_hz)} x2={X(e.f_hz)} y1={0} y2={H - 14} stroke="#9d8cff" strokeDasharray="3 2" />
+        <rect x={X(e.f_hz) - 6} y={0} width={12} height={H - 14} fill="color-mix(in srgb, var(--color-accent) 10%, transparent)" />
+        <path d={`${d}L${W},${H - 14}L0,${H - 14}Z`} fill="color-mix(in srgb, var(--color-trace-1) 8%, transparent)" />
+        <path d={d} fill="none" stroke="var(--color-trace-1)" strokeWidth={1.25} />
+        <line x1={X(e.f_hz)} x2={X(e.f_hz)} y1={0} y2={H - 14} stroke="var(--color-accent)" strokeDasharray="3 2" />
         {[lo, e.f_hz, hi].map((f) => (
-          <text key={f} x={X(f)} y={H - 3} textAnchor={f === lo ? 'start' : f === hi ? 'end' : 'middle'} fontSize={9.5} fill="#6c7580" className="num">
+          <text key={f} x={X(f)} y={H - 3} textAnchor={f === lo ? 'start' : f === hi ? 'end' : 'middle'} fontSize={9.5} fill="var(--color-fg-3)" className="num">
             {f.toFixed(1)}
           </text>
         ))}
@@ -82,7 +82,7 @@ function MetricCard({ e }: { e: EvidenceMetric }) {
       </div>
       <div className="relative mt-3 h-8">
         <div className="absolute left-0 right-0 top-1/2 h-px bg-line-2" />
-        <div className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-[2px] bg-[rgba(231,234,238,.12)]" style={{ left: `${X(e.value - e.err)}%`, width: `${X(e.value + e.err) - X(e.value - e.err)}%` }} />
+        <div className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-[2px] bg-fg-1/12" style={{ left: `${X(e.value - e.err)}%`, width: `${X(e.value + e.err) - X(e.value - e.err)}%` }} />
         <div className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-fg-3" style={{ left: `${X(e.value - e.err)}%` }} />
         <div className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-fg-3" style={{ left: `${X(e.value + e.err)}%` }} />
         <div className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-fg-1" style={{ left: `${X(e.value)}%` }} />
@@ -117,7 +117,7 @@ export function EvidenceDrawer() {
       <div onClick={close} className={cx('absolute inset-0 bg-black/50 backdrop-blur-[1px] transition-opacity duration-200', t ? 'opacity-100' : 'opacity-0')} />
       <aside
         className={cx(
-          'absolute bottom-0 right-0 top-0 flex w-full max-w-[420px] flex-col border-l border-line-2 bg-bg-1 shadow-[-24px_0_48px_-12px_rgba(0,0,0,.6)] transition-transform duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)]',
+          'absolute bottom-0 right-0 top-0 flex w-full max-w-[420px] flex-col border-l border-line-2 bg-bg-1 shadow-[-24px_0_48px_-12px_color-mix(in_srgb,var(--color-shadow)_60%,transparent)] transition-transform duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)]',
           t ? 'translate-x-0' : 'translate-x-full',
         )}
         role="dialog"
@@ -139,7 +139,7 @@ export function EvidenceDrawer() {
               ref={(el) => {
                 refs.current[i] = el
               }}
-              className={cx('rounded-md border p-3 transition-colors', i === t.focus ? 'border-[rgba(157,140,255,.45)] bg-bg-2' : 'border-line-1 bg-bg-1')}
+              className={cx('rounded-md border p-3 transition-colors', i === t.focus ? 'border-accent/45 bg-bg-2' : 'border-line-1 bg-bg-1')}
             >
               <div className="mb-2 flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-fg-4">
                 {e.kind === 'spectrum_peak' ? <Waves size={11} /> : e.kind === 'frame' ? <ImageIcon size={11} /> : <Sigma size={11} />}

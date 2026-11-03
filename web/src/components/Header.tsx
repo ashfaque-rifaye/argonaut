@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { CircleStop, Crosshair, Play, ShieldCheck, Sigma } from 'lucide-react'
+import { CircleStop, Crosshair, Keyboard, Play, ShieldCheck, Sigma } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { link } from '../lib/socket'
 import { fmtClock } from '../lib/format'
 import { Btn, cx, Sparkline, StatusDot, Tip } from './ui'
 import { Logo } from './Logo'
+import { ThemeToggle } from './ThemeToggle'
+import { showShortcuts } from './Shortcuts'
+import { onLink } from '../lib/router'
 export { Logo }
 
 function Micro({ label, children, title }: { label: string; children: React.ReactNode; title?: React.ReactNode }) {
@@ -26,12 +29,12 @@ export function BandBar({ direct, dealiased, w = 84, h = 5 }: { direct: number; 
     <svg width={w} height={h} className="block shrink-0" aria-hidden>
       <defs>
         <pattern id="bb-hatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="3" stroke="#9d8cff" strokeWidth="1.4" strokeOpacity="0.8" />
+          <line x1="0" y1="0" x2="0" y2="3" stroke="var(--color-accent)" strokeWidth="1.4" strokeOpacity="0.8" />
         </pattern>
       </defs>
-      <rect x={0} y={0} width={w} height={h} rx={1} fill="#121519" stroke="#283038" strokeWidth={0.75} />
+      <rect x={0} y={0} width={w} height={h} rx={1} fill="var(--color-bg-2)" stroke="var(--color-line-2)" strokeWidth={0.75} />
       {dealiased > direct && <rect x={xd} y={0.5} width={w - xd - 0.5} height={h - 1} fill="url(#bb-hatch)" />}
-      <rect x={0.5} y={0.5} width={Math.max(1, xd - 0.5)} height={h - 1} fill="#a2abb5" />
+      <rect x={0.5} y={0.5} width={Math.max(1, xd - 0.5)} height={h - 1} fill="var(--color-fg-2)" />
     </svg>
   )
 }
@@ -119,7 +122,7 @@ export function Header() {
 
   const modeChip =
     mode === 'live' ? (
-      <span className="inline-flex h-[22px] items-center gap-1.5 rounded-[5px] border border-[rgba(242,72,75,.35)] bg-[var(--alarm-dim)] px-2 text-[10.5px] font-semibold tracking-[0.12em] text-[#ff8a8c]">
+      <span className="inline-flex h-[22px] items-center gap-1.5 rounded-[5px] border border-alarm/35 bg-[var(--alarm-dim)] px-2 text-[10.5px] font-semibold tracking-[0.12em] text-alarm-2">
         <StatusDot state="live" /> LIVE
       </span>
     ) : mode === 'replay' ? (
@@ -138,10 +141,12 @@ export function Header() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line-1 bg-bg-1 px-3 md:px-4">
-      <Logo />
+      <a href="/" onClick={onLink} aria-label="Argonaut home" title="Back to the overview" className="shrink-0 rounded-md transition-opacity hover:opacity-80">
+        <Logo />
+      </a>
       <div className="hidden h-5 w-px bg-line-2 md:block" />
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="truncate text-[13.5px] font-semibold text-fg-1">{assetName}</span>
+        <span className="truncate whitespace-nowrap text-[13.5px] font-semibold text-fg-1 xl:shrink-0">{assetName}</span>
         {asset && (
           <span className="num hidden truncate text-[11px] text-fg-3 lg:inline">
             {asset.nameplate.rpm} rpm · {(asset.nameplate.kw * 1000).toFixed(0)} W · {asset.nameplate.poles}-pole
@@ -153,33 +158,43 @@ export function Header() {
       <div className="ml-auto flex items-center gap-1.5">
         <div className="hidden items-center gap-1 xl:flex">
           <Btn size="sm" variant="ghost" onClick={() => cmd('start_coastdown')} title="Command: start_coastdown">
-            <Play size={13} /> <span className="hidden 2xl:inline">Coast-down</span>
+            <Play size={13} /> <span className="hidden min-[1760px]:inline">Coast-down</span>
           </Btn>
           <Btn size="sm" variant="ghost" onClick={() => cmd('identify')} title="Command: identify">
-            <Crosshair size={13} /> <span className="hidden 2xl:inline">Identify</span>
+            <Crosshair size={13} /> <span className="hidden min-[1760px]:inline">Identify</span>
           </Btn>
           <Btn size="sm" variant="ghost" onClick={() => cmd('optimize')} title="Command: optimize">
-            <Sigma size={13} /> <span className="hidden 2xl:inline">Optimize</span>
+            <Sigma size={13} /> <span className="hidden min-[1760px]:inline">Optimize</span>
           </Btn>
           <Btn size="sm" variant="ghost" disabled={!proposal} onClick={() => cmd('verify')} title="Command: verify">
-            <ShieldCheck size={13} /> <span className="hidden 2xl:inline">Verify</span>
+            <ShieldCheck size={13} /> <span className="hidden min-[1760px]:inline">Verify</span>
           </Btn>
           <Btn size="sm" variant="ghost" onClick={() => cmd('stop')} title="Command: stop">
-            <CircleStop size={13} /> <span className="hidden 2xl:inline">Stop</span>
+            <CircleStop size={13} /> <span className="hidden min-[1760px]:inline">Stop</span>
           </Btn>
         </div>
         <div className="mx-2 hidden h-5 w-px bg-line-2 xl:block" />
         {modeChip}
-        <span className="num hidden items-center gap-1.5 rounded-[5px] border border-line-1 px-2 py-[3px] text-[11px] text-fg-2 sm:inline-flex" title="Session time">
+        <span className="num hidden items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-line-1 px-2 py-[3px] text-[11px] text-fg-2 sm:inline-flex" title="Session time">
           <span className="h-1.5 w-1.5 rounded-full bg-alarm" />
           REC {fmtClock(elapsed)}
         </span>
-        <span className={cx('hidden items-center gap-1.5 pl-1 text-[11px] text-fg-3 md:inline-flex')} title={sessionId ?? ''}>
+        <span className={cx('hidden items-center gap-1.5 whitespace-nowrap pl-1 text-[11px] text-fg-3 md:inline-flex')} title={sessionId ? `session ${sessionId}` : ''}>
           <StatusDot state={connState} />
           <span className="text-fg-2">{connLabel}</span>
           <span className="num text-fg-4">{rate} ev/s</span>
-          {sessionId && <span className="num hidden text-fg-4 2xl:inline">· {sessionId}</span>}
         </span>
+        <div className="mx-1 hidden h-5 w-px bg-line-2 sm:block" />
+        <button
+          onClick={showShortcuts}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          className="hidden h-7 items-center gap-1 rounded-md border border-line-2 bg-bg-2 px-1.5 text-fg-3 transition-colors hover:border-line-3 hover:bg-bg-3 hover:text-fg-1 sm:inline-flex"
+        >
+          <Keyboard size={13} />
+          <span className="num text-[10px]">?</span>
+        </button>
+        <ThemeToggle />
       </div>
     </header>
   )

@@ -38,49 +38,49 @@ function FddPlot({ odsF }: { odsF: number | null }) {
         <svg width={W} height={H} className="block">
           <defs>
             <linearGradient id="fdd-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="rgba(216,222,230,.14)" />
-              <stop offset="1" stopColor="rgba(216,222,230,0)" />
+              <stop offset="0" stopColor="color-mix(in srgb, var(--color-trace-1) 14%, transparent)" />
+              <stop offset="1" stopColor="color-mix(in srgb, var(--color-trace-1) 0%, transparent)" />
             </linearGradient>
           </defs>
           {niceTicks(0, fMax, Math.max(3, Math.floor(pw / 70))).map((f) => (
             <g key={f}>
-              <line x1={X(f)} x2={X(f)} y1={M.t} y2={M.t + ph} stroke="#171b20" />
-              <text x={X(f)} y={H - 6} textAnchor="middle" fontSize={10} fill="#6c7580" className="num">
+              <line x1={X(f)} x2={X(f)} y1={M.t} y2={M.t + ph} stroke="var(--color-grid)" />
+              <text x={X(f)} y={H - 6} textAnchor="middle" fontSize={10} fill="var(--color-fg-3)" className="num">
                 {f}
               </text>
             </g>
           ))}
           {Array.from({ length: yHi - yLo + 1 }, (_, i) => yLo + i).map((e) => (
             <g key={e}>
-              <line x1={M.l} x2={M.l + pw} y1={Y(10 ** e)} y2={Y(10 ** e)} stroke="#171b20" />
-              <text x={M.l - 6} y={Y(10 ** e) + 3.5} textAnchor="end" fontSize={9.5} fill="#6c7580" className="num">
+              <line x1={M.l} x2={M.l + pw} y1={Y(10 ** e)} y2={Y(10 ** e)} stroke="var(--color-grid)" />
+              <text x={M.l - 6} y={Y(10 ** e) + 3.5} textAnchor="end" fontSize={9.5} fill="var(--color-fg-3)" className="num">
                 1e{e}
               </text>
             </g>
           ))}
           <path d={`${d1}L${X(fMax)},${M.t + ph}L${X(0)},${M.t + ph}Z`} fill="url(#fdd-fill)" />
-          <path d={d2} fill="none" stroke="#7b8693" strokeWidth={1} strokeDasharray="3 2" />
-          <path d={d1} fill="none" stroke="#d8dee6" strokeWidth={1.25} />
+          <path d={d2} fill="none" stroke="var(--color-trace-2)" strokeWidth={1} strokeDasharray="3 2" />
+          <path d={d1} fill="none" stroke="var(--color-trace-1)" strokeWidth={1.25} />
           {modal.modes.map((m, i) => {
             const y = Y(peakAt(m.f_hz))
             const on = odsF != null && Math.abs(odsF - m.f_hz) < 0.3
             return (
               <g key={i}>
-                <line x1={X(m.f_hz)} x2={X(m.f_hz)} y1={y - 4} y2={y - 16} stroke={on ? '#9d8cff' : '#a2abb5'} />
-                <rect x={X(m.f_hz) - 12} y={Math.max(0, y - 30)} width={24} height={13} rx={3} fill={on ? '#9d8cff' : '#0d0f12'} stroke={on ? '#9d8cff' : '#323a43'} />
-                <text x={X(m.f_hz)} y={Math.max(0, y - 30) + 9.5} textAnchor="middle" fontSize={9.5} fill={on ? '#0b0a14' : '#e7eaee'} fontWeight={600} className="num">
+                <line x1={X(m.f_hz)} x2={X(m.f_hz)} y1={y - 4} y2={y - 16} stroke={on ? 'var(--color-accent)' : 'var(--color-fg-2)'} />
+                <rect x={X(m.f_hz) - 12} y={Math.max(0, y - 30)} width={24} height={13} rx={3} fill={on ? 'var(--color-accent)' : 'var(--color-bg-1)'} stroke={on ? 'var(--color-accent)' : 'var(--color-line-3)'} />
+                <text x={X(m.f_hz)} y={Math.max(0, y - 30) + 9.5} textAnchor="middle" fontSize={9.5} fill={on ? 'var(--color-on-accent)' : 'var(--color-fg-1)'} fontWeight={600} className="num">
                   M{i + 1}
                 </text>
               </g>
             )
           })}
           <g className="num" fontSize={9.5}>
-            <line x1={M.l + pw - 92} x2={M.l + pw - 80} y1={M.t + 6} y2={M.t + 6} stroke="#d8dee6" />
-            <text x={M.l + pw - 76} y={M.t + 9.5} fill="#a2abb5">
+            <line x1={M.l + pw - 92} x2={M.l + pw - 80} y1={M.t + 6} y2={M.t + 6} stroke="var(--color-trace-1)" />
+            <text x={M.l + pw - 76} y={M.t + 9.5} fill="var(--color-fg-2)">
               SV1
             </text>
-            <line x1={M.l + pw - 46} x2={M.l + pw - 34} y1={M.t + 6} y2={M.t + 6} stroke="#7b8693" strokeDasharray="3 2" />
-            <text x={M.l + pw - 30} y={M.t + 9.5} fill="#6c7580">
+            <line x1={M.l + pw - 46} x2={M.l + pw - 34} y1={M.t + 6} y2={M.t + 6} stroke="var(--color-trace-2)" strokeDasharray="3 2" />
+            <text x={M.l + pw - 30} y={M.t + 9.5} fill="var(--color-fg-3)">
               SV2
             </text>
           </g>
@@ -92,10 +92,10 @@ function FddPlot({ odsF }: { odsF: number | null }) {
 
 function ShapeBars({ m }: { m: ModalMode }) {
   const sensors = useStore((s) => s.sensors)
-  const color = (id: string) => sensors?.items.find((i) => i.id === id)?.color ?? '#6c7580'
+  const color = (id: string) => sensors?.items.find((i) => i.id === id)?.color ?? 'var(--color-fg-3)'
   return (
     <svg width={m.shape.length * 9} height={22} className="block" aria-label="mode shape">
-      <line x1={0} x2={m.shape.length * 9} y1={11} y2={11} stroke="#283038" />
+      <line x1={0} x2={m.shape.length * 9} y1={11} y2={11} stroke="var(--color-line-2)" />
       {m.shape.map((e, i) => {
         const sgn = Math.cos((e.phase_deg * Math.PI) / 180) >= 0 ? 1 : -1
         const h = Math.max(1, Math.abs(e.amp) * 10)
@@ -157,7 +157,7 @@ export function ModalPanel() {
                       <button
                         onClick={() => set({ ods: on ? { on: false, f_hz: m.f_hz } : { on: true, f_hz: m.f_hz } })}
                         title="Animate this mode shape on the live view (ODS)"
-                        className={cx('inline-flex h-5 items-center gap-1 rounded-[4px] border px-1.5 text-[10px] font-medium', on ? 'border-[rgba(157,140,255,.5)] text-accent-2' : 'border-line-2 text-fg-3 hover:text-fg-1')}
+                        className={cx('inline-flex h-5 items-center gap-1 rounded-[4px] border px-1.5 text-[10px] font-medium', on ? 'border-accent/50 text-accent-2' : 'border-line-2 text-fg-3 hover:text-fg-1')}
                       >
                         <Activity size={10} /> {on ? 'On' : 'ODS'}
                       </button>
@@ -169,7 +169,7 @@ export function ModalPanel() {
           </table>
         </div>
       ) : (
-        <Empty title="No modal estimate yet" hint="Frequency-domain decomposition runs across all virtual sensors. Peaks in SV1 are modes; singular vectors are mode shapes." />
+        <Empty title="No modal estimate yet" hint="Frequency-domain decomposition runs across all virtual sensors. Peaks in SV1 are modes; singular vectors are mode shapes." stage="dsp" />
       )}
     </Panel>
   )

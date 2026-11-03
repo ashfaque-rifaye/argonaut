@@ -608,7 +608,7 @@ export class MockEngine {
       this.pipe('sam', 'running', 0, `segmenting ${CHANNELS.map((c) => `“${c.label}”`).join(', ')}`)
       this.pipe('spark', 'running', 0, 'reading scene + nameplate')
     })
-    this.coach('warn', 'Camera shake 0.6 px. Brace the phone or lean it on something solid.', 0.8)
+    this.coach('warn', 'Camera shake 0.6 px. Brace the camera or mount it on something solid.', 0.8)
     this.after(1.2, () => {
       this.pipe('sam', 'ok', 412, '6 regions · mean conf 0.93')
       this.emitSensors()

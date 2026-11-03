@@ -1,17 +1,7 @@
-import { AudioLines, BrainCircuit, Lock, ScanEye, Sparkles, Waves } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { useStore, type StageState } from '../lib/store'
-import { PIPELINE_STAGES, STAGE_META, type PipelineStage } from '../lib/protocol'
+import { PIPELINE_STAGES, STAGE_META } from '../lib/protocol'
 import { cx, Panel, StatusDot } from './ui'
-
-const ICON: Record<PipelineStage, ReactNode> = {
-  sam: <ScanEye size={14} />,
-  spark: <Sparkles size={14} />,
-  wonder: <BrainCircuit size={14} />,
-  voice: <AudioLines size={14} />,
-  dsp: <Waves size={14} />,
-  open_weights: <Lock size={14} />,
-}
+import { STAGE_ICON } from './StageWait'
 
 function LatencyBars({ data }: { data: number[] }) {
   const d = data.slice(-14)
@@ -32,9 +22,9 @@ function Row({ s }: { s: StageState }) {
   const err = s.state === 'error'
   const isMeta = s.stage !== 'dsp'
   return (
-    <div className={cx('relative grid grid-cols-[26px_1fr_auto] items-center gap-x-2 overflow-hidden px-3 py-[7px]', running && 'bg-[linear-gradient(90deg,rgba(157,140,255,.07),transparent_70%)]')}>
-      <div className={cx('flex h-[26px] w-[26px] items-center justify-center rounded-md border', running ? 'border-[rgba(157,140,255,.45)] text-accent-2' : err ? 'border-[rgba(242,72,75,.45)] text-alarm' : s.state === 'ok' ? 'border-line-2 text-fg-2' : 'border-line-1 text-fg-4')}>
-        {ICON[s.stage]}
+    <div className={cx('relative grid grid-cols-[26px_1fr_auto] items-center gap-x-2 overflow-hidden px-3 py-[7px]', running && 'bg-[linear-gradient(90deg,color-mix(in_srgb,var(--color-accent)_7%,transparent),transparent_70%)]')}>
+      <div className={cx('flex h-[26px] w-[26px] items-center justify-center rounded-md border', running ? 'border-accent/45 text-accent-2' : err ? 'border-alarm/45 text-alarm' : s.state === 'ok' ? 'border-line-2 text-fg-2' : 'border-line-1 text-fg-4')}>
+        {STAGE_ICON[s.stage](14)}
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
@@ -55,7 +45,7 @@ function Row({ s }: { s: StageState }) {
       </div>
       {running && (
         <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full overflow-hidden">
-          <div className="anim-scan h-px w-1/4 bg-[linear-gradient(90deg,transparent,#9d8cff,transparent)]" />
+          <div className="anim-scan h-px w-1/4 bg-[linear-gradient(90deg,transparent,var(--color-accent),transparent)]" />
         </div>
       )}
     </div>

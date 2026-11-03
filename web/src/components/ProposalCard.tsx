@@ -7,6 +7,7 @@ import { useSize } from '../lib/useSize'
 import type { ProposalEvent } from '../lib/protocol'
 import { IsoBar, isoPos } from './IsoBar'
 import { ClosedLoop, RtoStatusChip } from './ClosedLoop'
+import { StageWait } from './StageWait'
 import { Btn, Chip, cx, Panel, Tip } from './ui'
 
 const rpmTxt = (v: number) => `${Math.round(v)}`
@@ -56,9 +57,9 @@ function ObjectiveChart({ p }: { p: ProposalEvent }) {
   const pNew = p.risk?.p_res_proposed ?? (hasRisk ? interp(curve.rpm, curve.p_res!, p.proposed.speed_rpm) : 0)
   const zones = [
     { lo: 0, hi: ISO_BOUNDS.AB, fill: 'transparent', z: 'A' },
-    { lo: ISO_BOUNDS.AB, hi: ISO_BOUNDS.BC, fill: 'rgba(231,234,238,0.025)', z: 'B' },
-    { lo: ISO_BOUNDS.BC, hi: ISO_BOUNDS.CD, fill: 'rgba(240,166,58,0.06)', z: 'C' },
-    { lo: ISO_BOUNDS.CD, hi: 1e9, fill: 'rgba(242,72,75,0.08)', z: 'D' },
+    { lo: ISO_BOUNDS.AB, hi: ISO_BOUNDS.BC, fill: 'color-mix(in srgb, var(--color-fg-1) 2.5%, transparent)', z: 'B' },
+    { lo: ISO_BOUNDS.BC, hi: ISO_BOUNDS.CD, fill: 'color-mix(in srgb, var(--color-warn) 6%, transparent)', z: 'C' },
+    { lo: ISO_BOUNDS.CD, hi: 1e9, fill: 'color-mix(in srgb, var(--color-alarm) 8%, transparent)', z: 'D' },
   ].filter((z) => z.lo < vMax)
   const cx0 = X(p.current.speed_rpm)
   const cy0 = Y(p.current.vel_mm_s)
@@ -71,14 +72,14 @@ function ObjectiveChart({ p }: { p: ProposalEvent }) {
         <svg width={W} height={H} className="block">
           <defs>
             <pattern id="oc-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(242,72,75,.28)" strokeWidth="2" />
+              <line x1="0" y1="0" x2="0" y2="6" stroke="color-mix(in srgb, var(--color-alarm) 28%, transparent)" strokeWidth="2" />
             </pattern>
             <linearGradient id="oc-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="rgba(216,222,230,.16)" />
-              <stop offset="1" stopColor="rgba(216,222,230,0)" />
+              <stop offset="0" stopColor="color-mix(in srgb, var(--color-trace-1) 16%, transparent)" />
+              <stop offset="1" stopColor="color-mix(in srgb, var(--color-trace-1) 0%, transparent)" />
             </linearGradient>
             <marker id="oc-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#9d8cff" />
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--color-accent)" />
             </marker>
             <clipPath id="oc-clip">
               <rect x={M.l} y={M.t} width={pw} height={ph} />
@@ -94,31 +95,31 @@ function ObjectiveChart({ p }: { p: ProposalEvent }) {
           {zones.map((z) => (
             <g key={z.z}>
               <rect x={M.l} width={pw} y={Y(Math.min(z.hi, vMax))} height={Math.max(0, Y(z.lo) - Y(Math.min(z.hi, vMax)))} fill={z.fill} />
-              {z.lo > 0 && <line x1={M.l} x2={M.l + pw} y1={Y(z.lo)} y2={Y(z.lo)} stroke={z.z === 'C' ? 'rgba(240,166,58,.35)' : z.z === 'D' ? 'rgba(242,72,75,.4)' : '#1c2127'} strokeDasharray="2 3" />}
-              <text x={M.l + pw - 3} y={Y(Math.min(z.hi, vMax)) + 10} textAnchor="end" fontSize={8.5} fill={z.z === 'C' ? 'rgba(240,166,58,.7)' : z.z === 'D' ? 'rgba(242,72,75,.75)' : '#454d56'} className="num" fontWeight={600}>
+              {z.lo > 0 && <line x1={M.l} x2={M.l + pw} y1={Y(z.lo)} y2={Y(z.lo)} stroke={z.z === 'C' ? 'color-mix(in srgb, var(--color-warn) 35%, transparent)' : z.z === 'D' ? 'color-mix(in srgb, var(--color-alarm) 40%, transparent)' : 'var(--color-line-1)'} strokeDasharray="2 3" />}
+              <text x={M.l + pw - 3} y={Y(Math.min(z.hi, vMax)) + 10} textAnchor="end" fontSize={8.5} fill={z.z === 'C' ? 'color-mix(in srgb, var(--color-warn) 70%, transparent)' : z.z === 'D' ? 'color-mix(in srgb, var(--color-alarm) 75%, transparent)' : 'var(--color-fg-4)'} className="num" fontWeight={600}>
                 {z.z}
               </text>
             </g>
           ))}
           {niceTicks(0, vMax, 3).map((v) => (
-            <text key={`v${v}`} x={M.l - 5} y={Y(v) + 3.5} textAnchor="end" fontSize={9.5} fill="#6c7580" className="num">
+            <text key={`v${v}`} x={M.l - 5} y={Y(v) + 3.5} textAnchor="end" fontSize={9.5} fill="var(--color-fg-3)" className="num">
               {v}
             </text>
           ))}
           {niceTicks(0, kMax * 1000, 3).map((w) => (
-            <text key={`k${w}`} x={M.l + pw + 5} y={YK(w / 1000) + 3.5} fontSize={9.5} fill="#454d56" className="num">
+            <text key={`k${w}`} x={M.l + pw + 5} y={YK(w / 1000) + 3.5} fontSize={9.5} fill="var(--color-fg-4)" className="num">
               {w}
             </text>
           ))}
           {niceTicks(xMin, xMax, Math.max(3, Math.floor(pw / 70))).map((r) => (
-            <text key={`x${r}`} x={X(r)} y={M.t + ph + 17} textAnchor="middle" fontSize={9.5} fill="#6c7580" className="num">
+            <text key={`x${r}`} x={X(r)} y={M.t + ph + 17} textAnchor="middle" fontSize={9.5} fill="var(--color-fg-3)" className="num">
               {r}
             </text>
           ))}
-          <text x={M.l - 5} y={M.t - 8} textAnchor="end" fontSize={9} fill="#6c7580" className="num">
+          <text x={M.l - 5} y={M.t - 8} textAnchor="end" fontSize={9} fill="var(--color-fg-3)" className="num">
             mm/s
           </text>
-          <text x={M.l + pw + 5} y={M.t - 8} fontSize={9} fill="#454d56" className="num">
+          <text x={M.l + pw + 5} y={M.t - 8} fontSize={9} fill="var(--color-fg-4)" className="num">
             W
           </text>
 
@@ -127,68 +128,68 @@ function ObjectiveChart({ p }: { p: ProposalEvent }) {
               <rect key={`e${i}`} x={X(a)} y={M.t} width={Math.max(1, X(b) - X(a))} height={ph} fill="url(#oc-hatch)" />
             ))}
             {hasBand ? (
-              <path d={bandPath} fill="rgba(216,222,230,0.13)" stroke="rgba(216,222,230,0.22)" strokeWidth={0.75} />
+              <path d={bandPath} fill="color-mix(in srgb, var(--color-trace-1) 13%, transparent)" stroke="color-mix(in srgb, var(--color-trace-1) 22%, transparent)" strokeWidth={0.75} />
             ) : (
               <path d={`${vPath}L${X(curve.rpm[curve.rpm.length - 1])},${M.t + ph}L${X(curve.rpm[0])},${M.t + ph}Z`} fill="url(#oc-fill)" />
             )}
-            <path d={kPath} fill="none" stroke="#6c7580" strokeWidth={1} strokeDasharray="4 3" />
-            <path d={vPath} fill="none" stroke="#d8dee6" strokeWidth={1.5} strokeLinejoin="round" />
+            <path d={kPath} fill="none" stroke="var(--color-fg-3)" strokeWidth={1} strokeDasharray="4 3" />
+            <path d={vPath} fill="none" stroke="var(--color-trace-1)" strokeWidth={1.5} strokeLinejoin="round" />
           </g>
           {/* feasible band strip + criticals on the speed axis */}
-          <rect x={M.l} y={M.t + ph + 2} width={pw} height={4} fill="#121519" />
+          <rect x={M.l} y={M.t + ph + 2} width={pw} height={4} fill="var(--color-bg-2)" />
           {p.feasible_band_rpm.map(([a, b], i) => (
-            <rect key={`f${i}`} x={X(a)} y={M.t + ph + 2} width={Math.max(1, X(b) - X(a))} height={4} fill="#5b6470" />
+            <rect key={`f${i}`} x={X(a)} y={M.t + ph + 2} width={Math.max(1, X(b) - X(a))} height={4} fill="var(--color-fg-3)" />
           ))}
           {cb?.criticals
             .filter((c) => c.rpm < xMax && c.order <= 2)
             .map((c, i) => (
-              <path key={`c${i}`} d={`M${X(c.rpm) - 3},${M.t + ph + 11} L${X(c.rpm) + 3},${M.t + ph + 11} L${X(c.rpm)},${M.t + ph + 7} Z`} fill="#f0a63a" />
+              <path key={`c${i}`} d={`M${X(c.rpm) - 3},${M.t + ph + 11} L${X(c.rpm) + 3},${M.t + ph + 11} L${X(c.rpm)},${M.t + ph + 7} Z`} fill="var(--color-warn)" />
             ))}
 
           {/* move arrow */}
-          <path d={`M${cx0},${cy0 - 6} Q${(cx0 + cx1) / 2},${Math.min(cy0, cy1) - 26} ${cx1 + 4},${cy1 - 7}`} fill="none" stroke="#9d8cff" strokeWidth={1.25} markerEnd="url(#oc-arrow)" />
+          <path d={`M${cx0},${cy0 - 6} Q${(cx0 + cx1) / 2},${Math.min(cy0, cy1) - 26} ${cx1 + 4},${cy1 - 7}`} fill="none" stroke="var(--color-accent)" strokeWidth={1.25} markerEnd="url(#oc-arrow)" />
           {/* current */}
-          <line x1={cx0} x2={cx0} y1={M.t} y2={M.t + ph} stroke="#e7eaee" strokeOpacity={0.5} />
-          <circle cx={cx0} cy={cy0} r={4} fill="#e7eaee" stroke="#0d0f12" strokeWidth={1.5} />
-          <text x={cx0 + (cx0 >= cx1 ? 4 : -4)} y={M.t - 8} textAnchor={cx0 >= cx1 ? 'start' : 'end'} fontSize={9.5} fill="#e7eaee" fontWeight={600} className="num">
+          <line x1={cx0} x2={cx0} y1={M.t} y2={M.t + ph} stroke="var(--color-fg-1)" strokeOpacity={0.5} />
+          <circle cx={cx0} cy={cy0} r={4} fill="var(--color-fg-1)" stroke="var(--color-bg-1)" strokeWidth={1.5} />
+          <text x={cx0 + (cx0 >= cx1 ? 4 : -4)} y={M.t - 8} textAnchor={cx0 >= cx1 ? 'start' : 'end'} fontSize={9.5} fill="var(--color-fg-1)" fontWeight={600} className="num">
             NOW {rpmTxt(p.current.speed_rpm)}
           </text>
           {/* proposed */}
-          <line x1={cx1} x2={cx1} y1={M.t} y2={M.t + ph} stroke="#9d8cff" strokeDasharray="3 3" />
-          <rect x={cx1 - 5} y={cy1 - 5} width={10} height={10} transform={`rotate(45 ${cx1} ${cy1})`} fill="#9d8cff" stroke="#0d0f12" strokeWidth={1.5} />
-          <text x={cx1 + (cx0 >= cx1 ? -4 : 4)} y={M.t - 8} textAnchor={cx0 >= cx1 ? 'end' : 'start'} fontSize={9.5} fill="#c3b8ff" fontWeight={600} className="num">
+          <line x1={cx1} x2={cx1} y1={M.t} y2={M.t + ph} stroke="var(--color-accent)" strokeDasharray="3 3" />
+          <rect x={cx1 - 5} y={cy1 - 5} width={10} height={10} transform={`rotate(45 ${cx1} ${cy1})`} fill="var(--color-accent)" stroke="var(--color-bg-1)" strokeWidth={1.5} />
+          <text x={cx1 + (cx0 >= cx1 ? -4 : 4)} y={M.t - 8} textAnchor={cx0 >= cx1 ? 'end' : 'start'} fontSize={9.5} fill="var(--color-accent-2)" fontWeight={600} className="num">
             {p.id.toUpperCase()} {rpmTxt(p.proposed.speed_rpm)}
           </text>
-          {live && Math.abs(live.x - cx0) > 3 && Math.abs(live.x - cx1) > 3 && <circle cx={live.x} cy={live.y} r={3} fill="none" stroke="#e7eaee" />}
+          {live && Math.abs(live.x - cx0) > 3 && Math.abs(live.x - cx1) > 3 && <circle cx={live.x} cy={live.y} r={3} fill="none" stroke="var(--color-fg-1)" />}
 
           {hasRisk && (
             <g>
-              <rect x={M.l} y={laneTop} width={pw} height={LANE} fill="rgba(7,8,10,0.35)" stroke="#1c2127" />
+              <rect x={M.l} y={laneTop} width={pw} height={LANE} fill="color-mix(in srgb, var(--color-bg-0) 35%, transparent)" stroke="var(--color-line-1)" />
               <g clipPath="url(#oc-above)">
-                <path d={rArea} fill="rgba(242,72,75,0.32)" />
-                <path d={rPath} fill="none" stroke="#f2484b" strokeWidth={1} />
+                <path d={rArea} fill="color-mix(in srgb, var(--color-alarm) 32%, transparent)" />
+                <path d={rPath} fill="none" stroke="var(--color-alarm)" strokeWidth={1} />
               </g>
               <g clipPath="url(#oc-below)">
-                <path d={rArea} fill="rgba(108,117,128,0.22)" />
-                <path d={rPath} fill="none" stroke="#6c7580" strokeWidth={1} />
+                <path d={rArea} fill="color-mix(in srgb, var(--color-fg-3) 22%, transparent)" />
+                <path d={rPath} fill="none" stroke="var(--color-fg-3)" strokeWidth={1} />
               </g>
-              <line x1={M.l} x2={M.l + pw} y1={YR(thr)} y2={YR(thr)} stroke="#a2abb5" strokeDasharray="3 2" strokeWidth={0.75} />
-              <text x={M.l + pw + 4} y={YR(thr) + 3} fontSize={8.5} fill="#a2abb5" className="num">
+              <line x1={M.l} x2={M.l + pw} y1={YR(thr)} y2={YR(thr)} stroke="var(--color-fg-2)" strokeDasharray="3 2" strokeWidth={0.75} />
+              <text x={M.l + pw + 4} y={YR(thr) + 3} fontSize={8.5} fill="var(--color-fg-2)" className="num">
                 {(thr * 100).toFixed(0)}%
               </text>
-              <text x={M.l + pw + 4} y={laneTop + 7} fontSize={8} fill="#454d56" className="num">
+              <text x={M.l + pw + 4} y={laneTop + 7} fontSize={8} fill="var(--color-fg-4)" className="num">
                 100
               </text>
-              <text x={M.l - 5} y={laneTop + 8} textAnchor="end" fontSize={8.5} fill="#6c7580" className="num">
+              <text x={M.l - 5} y={laneTop + 8} textAnchor="end" fontSize={8.5} fill="var(--color-fg-3)" className="num">
                 P
               </text>
-              <text x={M.l - 5} y={laneTop + 18} textAnchor="end" fontSize={7.5} fill="#454d56" className="num">
+              <text x={M.l - 5} y={laneTop + 18} textAnchor="end" fontSize={7.5} fill="var(--color-fg-4)" className="num">
                 res
               </text>
-              <line x1={cx0} x2={cx0} y1={laneTop} y2={laneTop + LANE} stroke="#e7eaee" strokeOpacity={0.5} />
-              <circle cx={cx0} cy={YR(pNow)} r={2.75} fill="#e7eaee" stroke="#0d0f12" />
-              <line x1={cx1} x2={cx1} y1={laneTop} y2={laneTop + LANE} stroke="#9d8cff" strokeDasharray="3 3" />
-              <rect x={cx1 - 3.5} y={YR(pNew) - 3.5} width={7} height={7} transform={`rotate(45 ${cx1} ${YR(pNew)})`} fill="#9d8cff" stroke="#0d0f12" />
+              <line x1={cx0} x2={cx0} y1={laneTop} y2={laneTop + LANE} stroke="var(--color-fg-1)" strokeOpacity={0.5} />
+              <circle cx={cx0} cy={YR(pNow)} r={2.75} fill="var(--color-fg-1)" stroke="var(--color-bg-1)" />
+              <line x1={cx1} x2={cx1} y1={laneTop} y2={laneTop + LANE} stroke="var(--color-accent)" strokeDasharray="3 3" />
+              <rect x={cx1 - 3.5} y={YR(pNew) - 3.5} width={7} height={7} transform={`rotate(45 ${cx1} ${YR(pNew)})`} fill="var(--color-accent)" stroke="var(--color-bg-1)" />
             </g>
           )}
         </svg>
@@ -214,36 +215,36 @@ function SpeedAxis({ p }: { p: ProposalEvent }) {
         <svg width={W} height={H} className="block">
           <defs>
             <pattern id="pa-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(242,72,75,.5)" strokeWidth="1.6" />
+              <line x1="0" y1="0" x2="0" y2="5" stroke="color-mix(in srgb, var(--color-alarm) 50%, transparent)" strokeWidth="1.6" />
             </pattern>
           </defs>
-          <rect x={X(0)} y={y0} width={X(max) - X(0)} height={bh} rx={2} fill="#121519" stroke="#283038" />
+          <rect x={X(0)} y={y0} width={X(max) - X(0)} height={bh} rx={2} fill="var(--color-bg-2)" stroke="var(--color-line-2)" />
           {p.feasible_band_rpm.map(([a, b], i) => (
-            <rect key={`f${i}`} x={X(a)} y={y0} width={X(b) - X(a)} height={bh} fill="rgba(231,234,238,0.10)" stroke="#5b6470" />
+            <rect key={`f${i}`} x={X(a)} y={y0} width={X(b) - X(a)} height={bh} fill="color-mix(in srgb, var(--color-fg-1) 10%, transparent)" stroke="var(--color-fg-3)" />
           ))}
           {p.exclusion_bands_rpm.map(([a, b], i) => (
-            <rect key={`e${i}`} x={X(a)} y={y0} width={X(b) - X(a)} height={bh} fill="url(#pa-hatch)" stroke="rgba(242,72,75,.45)" />
+            <rect key={`e${i}`} x={X(a)} y={y0} width={X(b) - X(a)} height={bh} fill="url(#pa-hatch)" stroke="color-mix(in srgb, var(--color-alarm) 45%, transparent)" />
           ))}
           {cb?.criticals
             .filter((c) => c.rpm < max)
             .map((c, i) => (
-              <line key={`c${i}`} x1={X(c.rpm)} x2={X(c.rpm)} y1={y0 - 3} y2={y0 + bh + 3} stroke="#f0a63a" strokeWidth={1} />
+              <line key={`c${i}`} x1={X(c.rpm)} x2={X(c.rpm)} y1={y0 - 3} y2={y0 + bh + 3} stroke="var(--color-warn)" strokeWidth={1} />
             ))}
           {niceTicks(0, max, 6).map((v) => (
-            <text key={v} x={X(v)} y={H - 4} textAnchor="middle" fontSize={9.5} fill="#454d56" className="num">
+            <text key={v} x={X(v)} y={H - 4} textAnchor="middle" fontSize={9.5} fill="var(--color-fg-4)" className="num">
               {v}
             </text>
           ))}
-          <line x1={X(p.current.speed_rpm)} x2={X(p.proposed.speed_rpm) + 6} y1={y0 + bh / 2} y2={y0 + bh / 2} stroke="#9d8cff" strokeWidth={1.5} />
+          <line x1={X(p.current.speed_rpm)} x2={X(p.proposed.speed_rpm) + 6} y1={y0 + bh / 2} y2={y0 + bh / 2} stroke="var(--color-accent)" strokeWidth={1.5} />
           <g transform={`translate(${X(p.current.speed_rpm)} 0)`}>
-            <line y1={y0 - 6} y2={y0 + bh + 2} stroke="#e7eaee" strokeWidth={2} />
-            <text y={y0 - 10} textAnchor="middle" fontSize={9.5} fill="#e7eaee" className="num" fontWeight={600}>
+            <line y1={y0 - 6} y2={y0 + bh + 2} stroke="var(--color-fg-1)" strokeWidth={2} />
+            <text y={y0 - 10} textAnchor="middle" fontSize={9.5} fill="var(--color-fg-1)" className="num" fontWeight={600}>
               NOW {rpmTxt(p.current.speed_rpm)}
             </text>
           </g>
           <g transform={`translate(${X(p.proposed.speed_rpm)} 0)`}>
-            <rect x={-5} y={y0 + bh / 2 - 5} width={10} height={10} transform={`rotate(45 0 ${y0 + bh / 2})`} fill="#9d8cff" stroke="#0d0f12" />
-            <text y={y0 - 10} textAnchor="middle" fontSize={9.5} fill="#c3b8ff" className="num" fontWeight={600}>
+            <rect x={-5} y={y0 + bh / 2 - 5} width={10} height={10} transform={`rotate(45 0 ${y0 + bh / 2})`} fill="var(--color-accent)" stroke="var(--color-bg-1)" />
+            <text y={y0 - 10} textAnchor="middle" fontSize={9.5} fill="var(--color-accent-2)" className="num" fontWeight={600}>
               {p.id.toUpperCase()} {rpmTxt(p.proposed.speed_rpm)}
             </text>
           </g>
@@ -289,28 +290,28 @@ function CiCompare({ before, after, beforeV, afterV, pred }: { before: [number, 
   const pw = Math.max(10, W - l - r)
   const X = (v: number) => l + isoPos(v) * pw
   const rows = [
-    { k: 'before', ci: before, v: beforeV ?? (before[0] + before[1]) / 2, c: '#7b8693', y: 9 },
-    { k: 'after', ci: after, v: afterV, c: '#e7eaee', y: 25 },
+    { k: 'before', ci: before, v: beforeV ?? (before[0] + before[1]) / 2, c: 'var(--color-trace-2)', y: 9 },
+    { k: 'after', ci: after, v: afterV, c: 'var(--color-fg-1)', y: 25 },
   ]
   return (
     <div ref={box} className="w-full">
       {W > 0 && (
         <svg width={W} height={36} className="block">
-          {['#20262d', '#2a3139', '#3a2f1c', '#3d1d1f'].map((f, i) => (
+          {['var(--color-iso-a)', 'var(--color-iso-b)', 'var(--color-iso-c)', 'var(--color-iso-d)'].map((f, i) => (
             <rect key={f} x={l + (i / 4) * pw} y={1} width={pw / 4 - 1} height={32} fill={f} opacity={0.45} />
           ))}
           {rows.map((rw) => (
             <g key={rw.k}>
-              <text x={l - 6} y={rw.y + 3.5} textAnchor="end" fontSize={9} fill="#6c7580" className="num">
+              <text x={l - 6} y={rw.y + 3.5} textAnchor="end" fontSize={9} fill="var(--color-fg-3)" className="num">
                 {rw.k}
               </text>
               <line x1={X(rw.ci[0])} x2={X(rw.ci[1])} y1={rw.y} y2={rw.y} stroke={rw.c} strokeWidth={1.25} />
               <line x1={X(rw.ci[0])} x2={X(rw.ci[0])} y1={rw.y - 4} y2={rw.y + 4} stroke={rw.c} strokeWidth={1.25} />
               <line x1={X(rw.ci[1])} x2={X(rw.ci[1])} y1={rw.y - 4} y2={rw.y + 4} stroke={rw.c} strokeWidth={1.25} />
-              <circle cx={X(rw.v)} cy={rw.y} r={2.75} fill={rw.c} stroke="#0d0f12" />
+              <circle cx={X(rw.v)} cy={rw.y} r={2.75} fill={rw.c} stroke="var(--color-bg-1)" />
             </g>
           ))}
-          <rect x={X(pred) - 3.5} y={25 - 3.5} width={7} height={7} transform={`rotate(45 ${X(pred)} 25)`} fill="none" stroke="#c3b8ff" strokeWidth={1.25} />
+          <rect x={X(pred) - 3.5} y={25 - 3.5} width={7} height={7} transform={`rotate(45 ${X(pred)} 25)`} fill="none" stroke="var(--color-accent-2)" strokeWidth={1.25} />
         </svg>
       )}
     </div>
@@ -322,7 +323,7 @@ function Verification() {
   const p = useStore((s) => s.proposal)
   const dev = (v.measured_vel_mm_s / v.predicted_vel_mm_s - 1) * 100
   return (
-    <div className={cx('anim-in rounded-md border p-3', v.passed ? 'border-[rgba(60,191,138,.35)] bg-[var(--ok-dim)]' : 'border-[rgba(242,72,75,.4)] bg-[var(--alarm-dim)]')}>
+    <div className={cx('anim-in rounded-md border p-3', v.passed ? 'border-ok/35 bg-[var(--ok-dim)]' : 'border-alarm/40 bg-[var(--alarm-dim)]')}>
       <div className="flex items-center gap-2">
         {v.passed ? <CircleCheck size={16} className="text-ok" /> : <CircleX size={16} className="text-alarm" />}
         <span className={cx('text-[12.5px] font-semibold tracking-[0.04em]', v.passed ? 'text-ok' : 'text-alarm')}>{v.passed ? 'VERIFIED · closed loop' : 'VERIFICATION FAILED'}</span>
@@ -450,7 +451,7 @@ export function ProposalCard() {
       {p?.curve && (
         <>
           <span className="inline-flex items-center gap-1">
-            <span className="flex h-2 w-3 items-center bg-[rgba(216,222,230,.16)]">
+            <span className="flex h-2 w-3 items-center bg-trace-1/16">
               <span className="h-[2px] w-3 bg-trace-1" />
             </span>
             vibration{p.curve.vel_lo ? ' · 90%' : ''}
@@ -461,7 +462,7 @@ export function ProposalCard() {
         </>
       )}
       <span className="inline-flex items-center gap-1">
-        <span className="h-2 w-3 rounded-[1px] border border-[rgba(242,72,75,.45)] bg-[repeating-linear-gradient(45deg,rgba(242,72,75,.5)_0_1.5px,transparent_1.5px_4px)]" /> resonance
+        <span className="h-2 w-3 rounded-[1px] border border-alarm/45 bg-[repeating-linear-gradient(45deg,color-mix(in_srgb,var(--color-alarm)_50%,transparent)_0_1.5px,transparent_1.5px_4px)]" /> resonance
       </span>
     </span>
   )
@@ -507,10 +508,11 @@ export function ProposalCard() {
           <Btn size="sm" variant="subtle" onClick={() => link.send({ type: 'command', name: 'optimize' })}>
             <Sigma size={12} /> Run optimizer
           </Btn>
+          <StageWait stage="wonder" />
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div key={p.id} className="anim-in min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-3 p-3">
               {/* headline gains */}
               <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line-1 bg-line-1">

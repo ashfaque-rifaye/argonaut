@@ -3,7 +3,7 @@ import { AudioLines, ChevronRight, Info, Mic, OctagonAlert, TriangleAlert, Video
 import { useStore } from '../lib/store'
 import { fint, fx } from '../lib/format'
 import { IsoBar } from './IsoBar'
-import { cx, Sparkline } from './ui'
+import { cx, LiveTick, Sparkline } from './ui'
 
 function SourceChip({ on, icon, label }: { on: boolean; icon: React.ReactNode; label: string }) {
   return (
@@ -28,7 +28,7 @@ function SpeedSourceBadge({ src }: { src: string }) {
       title={`speed_source: ${src}`}
       className={cx(
         'inline-flex h-[17px] max-w-full items-center gap-1 truncate rounded-[4px] border px-1.5 text-[10px] font-medium',
-        audioOnly ? 'border-[rgba(157,140,255,.35)] bg-[var(--accent-dim)] text-accent-2' : 'border-line-1 text-fg-3',
+        audioOnly ? 'border-accent/35 bg-[var(--accent-dim)] text-accent-2' : 'border-line-1 text-fg-3',
       )}
     >
       {audioOnly ? <Mic size={10} /> : src.includes('video') ? <Video size={10} /> : null}
@@ -38,7 +38,7 @@ function SpeedSourceBadge({ src }: { src: string }) {
 }
 
 function ZoneBadge({ zone }: { zone?: string }) {
-  const cls = zone === 'D' ? 'text-alarm border-[rgba(242,72,75,.45)] bg-[var(--alarm-dim)]' : zone === 'C' ? 'text-warn border-[rgba(240,166,58,.4)] bg-[var(--warn-dim)]' : 'text-fg-2 border-line-2 bg-bg-2'
+  const cls = zone === 'D' ? 'text-alarm border-alarm/45 bg-[var(--alarm-dim)]' : zone === 'C' ? 'text-warn border-warn/40 bg-[var(--warn-dim)]' : 'text-fg-2 border-line-2 bg-bg-2'
   return <span className={cx('num inline-flex h-[20px] items-center rounded-[4px] border px-1.5 text-[10.5px] font-semibold tracking-[0.06em]', cls)}>ZONE {zone ?? '–'}</span>
 }
 
@@ -64,7 +64,10 @@ export function TelemetryStrip() {
       {/* speed */}
       <div className="flex flex-col justify-between bg-bg-1 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="eyebrow">Shaft speed</span>
+          <span className="flex items-center gap-1.5">
+            <span className="eyebrow">Shaft speed</span>
+            <LiveTick tick={tel?.t} title="telemetry streaming" />
+          </span>
           <div className="flex gap-1">
             <SourceChip on={src.includes('video')} icon={<Video size={10} />} label="video" />
             <SourceChip on={src.includes('audio')} icon={<AudioLines size={10} />} label="audio" />
@@ -90,7 +93,10 @@ export function TelemetryStrip() {
       {/* overall severity */}
       <div className="flex flex-col justify-between bg-bg-1 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="eyebrow">Overall velocity · ISO 20816</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="eyebrow truncate">Overall velocity · ISO 20816</span>
+            <LiveTick tick={tel?.t} title="telemetry streaming" />
+          </span>
           <ZoneBadge zone={tel?.iso_zone} />
         </div>
         <div className="mt-1 flex items-end gap-3">
@@ -125,7 +131,7 @@ export function TelemetryStrip() {
                 className={cx('group flex min-w-0 flex-col justify-between px-2.5 py-2.5 text-left transition-colors hover:bg-bg-2', selected === c.id && 'bg-bg-2 shadow-[inset_0_-2px_0_0_var(--color-accent)]')}
               >
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: m?.color ?? '#6c7580' }} />
+                  <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: m?.color ?? 'var(--color-fg-3)' }} />
                   <span className="truncate text-[11px] font-medium text-fg-2 group-hover:text-fg-1">{m?.label ?? c.id}</span>
                   <span className={cx('num ml-auto text-[10px] font-semibold', zc)}>{c.iso_zone}</span>
                 </div>
@@ -167,7 +173,7 @@ export function TelemetryStrip() {
                 Evidence ({diag.evidence.length}) <ChevronRight size={12} />
               </button>
               {diag.severity === 'alarm' && !acked[diag.id] && (
-                <button onClick={() => setAcked((a) => ({ ...a, [diag.id]: true }))} className="ml-auto rounded-[4px] border border-[rgba(242,72,75,.45)] px-1.5 py-[1px] text-[10px] font-semibold tracking-[0.08em] text-alarm hover:bg-[var(--alarm-dim)]">
+                <button onClick={() => setAcked((a) => ({ ...a, [diag.id]: true }))} className="ml-auto rounded-[4px] border border-alarm/45 px-1.5 py-[1px] text-[10px] font-semibold tracking-[0.08em] text-alarm hover:bg-[var(--alarm-dim)]">
                   ACK
                 </button>
               )}

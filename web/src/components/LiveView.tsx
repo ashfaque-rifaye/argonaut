@@ -60,6 +60,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
   const H = sensors?.height ?? 540
   const k = size.w ? W / size.w : 2 // viewBox units per CSS px
   const items = sensors?.items ?? []
+  // a new SAM result (different regions, or regions that moved) replays the mask stroke-draw
+  const maskSig = useMemo(() => items.map((it) => `${it.id}:${it.bbox.map((v) => Math.round(v / 24)).join(',')}`).join('|'), [items])
 
   // webcam lifecycle
   useEffect(() => {
@@ -234,7 +236,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
             onChange={(v) => (v === 'clip' && !clipUrl && !mediaUrl ? fileRef.current?.click() : set({ videoSource: v }))}
             options={[
               { v: 'sim', label: <MonitorPlay size={12} />, title: 'Simulated feed' },
-              { v: 'webcam', label: <Camera size={12} />, title: 'Webcam / phone camera' },
+              { v: 'webcam', label: <Camera size={12} />, title: 'Device camera (webcam, USB or capture card)' },
               { v: 'clip', label: <Film size={12} />, title: 'Upload a clip (mp4/mov)' },
             ]}
           />
@@ -243,7 +245,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
             title="Operating deflection shape: exaggerated motion at a chosen frequency"
             className={cx(
               'ml-1 inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[10.5px] font-semibold tracking-[0.06em] transition-colors',
-              ods.on ? 'border-[rgba(157,140,255,.45)] bg-[var(--accent-dim)] text-accent-2' : 'border-line-2 bg-bg-2 text-fg-3 hover:text-fg-1',
+              ods.on ? 'border-accent/45 bg-[var(--accent-dim)] text-accent-2' : 'border-line-2 bg-bg-2 text-fg-3 hover:text-fg-1',
             )}
           >
             <Activity size={11} /> ODS
@@ -253,7 +255,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
       }
       bodyClass="flex flex-col"
     >
-      <div ref={box} className="relative aspect-video w-full overflow-hidden bg-black">
+      <div ref={box} className="scope-dark relative aspect-video w-full overflow-hidden bg-black">
         {src === 'sim' && <img src="/mock/rig.svg" alt="Simulated camera view of fan F-101 on its stand" className="absolute inset-0 h-full w-full object-contain" draggable={false} />}
         {src !== 'sim' && (
           <video ref={videoRef} src={src === 'clip' ? clipUrl ?? mediaUrl ?? undefined : undefined} className="absolute inset-0 h-full w-full object-contain" autoPlay muted playsInline loop />
@@ -267,13 +269,13 @@ export function LiveView({ compact }: { compact?: boolean }) {
         )}
 
         {/* vignette for legibility over any footage */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_45%,transparent_55%,rgba(0,0,0,.55))]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_45%,transparent_55%,color-mix(in_srgb,var(--color-shadow)_55%,transparent))]" />
 
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
-          {items.map((it) => {
+          {items.map((it, i) => {
             const sel = selected === it.id
             return (
-              <g key={it.id} className="cursor-pointer" onClick={() => !it.is_reference && set({ selectedChannel: it.id })}>
+              <g key={`${it.id}-${maskSig}`} className="cursor-pointer" onClick={() => !it.is_reference && set({ selectedChannel: it.id })}>
                 {ods.on && !it.is_reference && (
                   <polygon points={it.polygon.map((p) => p.join(',')).join(' ')} fill="none" stroke={it.color} strokeOpacity={0.35} strokeWidth={1 * k} strokeDasharray={`${3 * k} ${3 * k}`} />
                 )}
@@ -282,6 +284,9 @@ export function LiveView({ compact }: { compact?: boolean }) {
                     polyRefs.current[it.id] = el
                   }}
                   points={it.polygon.map((p) => p.join(',')).join(' ')}
+                  pathLength={it.is_reference ? undefined : 1}
+                  className={it.is_reference ? 'chip-in' : 'mask-in'}
+                  style={{ '--d': `${i * 110}ms` } as React.CSSProperties}
                   fill={it.color}
                   fillOpacity={it.is_reference ? 0.05 : sel ? 0.22 : 0.12}
                   stroke={it.color}
@@ -293,20 +298,22 @@ export function LiveView({ compact }: { compact?: boolean }) {
               </g>
             )
           })}
-          {chips.map(({ it, x, y, tw }) => {
+          {chips.map(({ it, x, y, tw }, i) => {
             const fs = 10.5 * k
             const label = it.label
             const conf = `${Math.round(it.confidence * 100)}`
             return (
-              <g key={`l-${it.id}`} transform={`translate(${x} ${y})`} pointerEvents="none">
-                <rect width={tw} height={17 * k} rx={3 * k} fill="#0b0d10" fillOpacity={0.86} stroke="#2c343c" strokeWidth={k} />
+              <g key={`l-${it.id}-${maskSig}`} transform={`translate(${x} ${y})`} pointerEvents="none">
+                <g className="chip-in" style={{ '--d': `${300 + i * 110}ms` } as React.CSSProperties}>
+                <rect width={tw} height={17 * k} rx={3 * k} fill="var(--color-bg-1)" fillOpacity={0.86} stroke="var(--color-line-2)" strokeWidth={k} />
                 <rect x={6 * k} y={5.5 * k} width={6 * k} height={6 * k} rx={1.5 * k} fill={it.color} />
-                <text x={17 * k} y={12 * k} fontSize={fs} fill="#e7eaee" fontFamily="Inter Variable, sans-serif" fontWeight={500}>
+                <text x={17 * k} y={12 * k} fontSize={fs} fill="var(--color-fg-1)" fontFamily="Inter Variable, sans-serif" fontWeight={500}>
                   {label}
-                  <tspan dx={5 * k} fill="#6c7580" fontFamily="JetBrains Mono Variable, monospace" fontSize={fs * 0.92}>
+                  <tspan dx={5 * k} fill="var(--color-fg-3)" fontFamily="JetBrains Mono Variable, monospace" fontSize={fs * 0.92}>
                     {conf}
                   </tspan>
                 </text>
+                </g>
               </g>
             )
           })}
@@ -323,7 +330,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
           </div>
         )}
         {ref && (
-          <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[60%] items-center gap-1.5 rounded-[4px] border border-[#2c343c] bg-[#0b0d10]/85 px-1.5 py-[3px] text-[10px] text-fg-2">
+          <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[60%] items-center gap-1.5 rounded-[4px] border border-line-2 bg-bg-1/85 px-1.5 py-[3px] text-[10px] text-fg-2">
             <Anchor size={11} className="text-fg-3" />
             <span className="font-semibold tracking-[0.06em] text-fg-1">REF</span>
             <span className="truncate">
@@ -332,13 +339,13 @@ export function LiveView({ compact }: { compact?: boolean }) {
           </div>
         )}
         {ods.on && (
-          <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-[5px] border border-[rgba(157,140,255,.35)] bg-[#0b0d10]/90 p-[3px] text-[10px]">
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-[5px] border border-accent/35 bg-bg-1/90 p-[3px] text-[10px]">
             <span className="px-1 font-semibold tracking-[0.06em] text-accent-2">ODS</span>
             {odsOptions.map((o) => (
               <button
                 key={o.label}
                 onClick={() => set({ ods: { on: true, f_hz: o.f } })}
-                className={cx('num rounded-[3px] px-1.5 py-[2px] transition-colors', ods.f_hz != null && Math.abs(ods.f_hz - o.f) < 0.3 ? 'bg-accent text-[#0b0a14]' : 'text-fg-2 hover:bg-bg-3')}
+                className={cx('num rounded-[3px] px-1.5 py-[2px] transition-colors', ods.f_hz != null && Math.abs(ods.f_hz - o.f) < 0.3 ? 'bg-accent text-on-accent' : 'text-fg-2 hover:bg-bg-3')}
               >
                 {o.label} {o.f.toFixed(1)}
               </button>
@@ -350,7 +357,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
           <div
             className={cx(
               'anim-in absolute left-1/2 top-9 max-w-[86%] -translate-x-1/2 rounded-[5px] border px-2 py-1 text-[11px] font-medium backdrop-blur-sm',
-              coach.level === 'block' ? 'border-[rgba(242,72,75,.5)] bg-[#2a1214]/90 text-[#ffb3b4]' : coach.level === 'warn' ? 'border-[rgba(240,166,58,.45)] bg-[#271d0e]/90 text-[#ffd391]' : 'border-[#2c343c] bg-[#0b0d10]/85 text-fg-1',
+              coach.level === 'block' ? 'border-alarm/50 bg-alarm-bg/90 text-alarm-2' : coach.level === 'warn' ? 'border-warn/45 bg-warn-bg/90 text-warn-2' : 'border-line-2 bg-bg-1/85 text-fg-1',
             )}
           >
             <span className="mr-1.5 text-[9.5px] font-semibold tracking-[0.1em] opacity-70">COACH</span>
@@ -373,7 +380,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
               onChange={(e) => setPrompts(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendPrompts()}
               placeholder="Place sensors by name: bearing housing, baseplate, wall"
-              className="h-6 min-w-0 flex-1 rounded-[5px] border border-line-1 bg-bg-0 px-2 text-[11px] text-fg-1 placeholder:text-fg-4 focus:border-[rgba(157,140,255,.5)] focus:outline-none"
+              className="h-6 min-w-0 flex-1 rounded-[5px] border border-line-1 bg-bg-0 px-2 text-[11px] text-fg-1 placeholder:text-fg-4 focus:border-accent/50 focus:outline-none"
             />
           </div>
           <Btn size="xs" variant="subtle" onClick={sendPrompts} title="Send sensors.set to SAM 3.1">

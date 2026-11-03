@@ -13,6 +13,7 @@ import { ModalPanel } from './components/ModalPanel'
 import { TwinPanel } from './components/TwinPanel'
 import { ProposalCard } from './components/ProposalCard'
 import { EvidenceDrawer } from './components/EvidenceDrawer'
+import { Shortcuts } from './components/Shortcuts'
 
 export function App() {
   const loopTab = useStore((s) => s.optimizerTab === 'loop')
@@ -29,7 +30,7 @@ export function App() {
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-px bg-bg-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[clamp(360px,24vw,450px)_minmax(0,1fr)_clamp(360px,23vw,430px)]">
         {/* left: sense + models + agent */}
         <div className="order-1 flex min-h-0 min-w-0 flex-col gap-px xl:order-none">
-          <div className="flex shrink-0">
+          <div className="flex shrink-0" data-panel="1">
             <LiveView />
           </div>
           <div className="flex shrink-0">
@@ -42,14 +43,14 @@ export function App() {
 
         {/* center: identify */}
         <div className="order-3 grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] gap-px md:col-span-2 xl:order-none xl:col-span-1 xl:grid-rows-[1fr_0.92fr_1.28fr]">
-          <div className="flex h-[260px] min-h-0 xl:h-auto">
+          <div className="flex h-[260px] min-h-0 xl:h-auto" data-panel="2">
             <SpectrumPanel />
           </div>
           <div className="flex h-[240px] min-h-0 xl:h-auto">
             <WaterfallPanel />
           </div>
           <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-px md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="flex h-[300px] min-h-0 min-w-0 xl:h-auto">
+            <div className="flex h-[300px] min-h-0 min-w-0 xl:h-auto" data-panel="3">
               <CampbellPanel />
             </div>
             <div className="flex h-[340px] min-h-0 min-w-0 xl:h-auto">
@@ -60,7 +61,7 @@ export function App() {
 
         {/* right: twin + optimize */}
         <div className="order-2 flex min-h-0 min-w-0 flex-col gap-px xl:order-none">
-          <div className={`flex min-h-[300px] xl:min-h-0 ${loopTab ? 'min-h-[560px] xl:flex-[2.6]' : 'xl:flex-[1.55]'}`}>
+          <div data-panel="4 5" className={`flex min-h-[300px] transition-[flex-grow] duration-300 ease-[var(--ease-out-soft)] xl:min-h-0 ${loopTab ? 'min-h-[560px] xl:flex-[2.6]' : 'xl:flex-[1.55]'}`}>
             <ProposalCard />
           </div>
           <div className="flex h-[340px] min-h-0 xl:h-auto xl:flex-1">
@@ -69,6 +70,7 @@ export function App() {
         </div>
       </main>
       <EvidenceDrawer />
+      <Shortcuts />
     </div>
   )
 }

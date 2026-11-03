@@ -1,21 +1,21 @@
 {
-  "_doc": "Media for the landing page. Paths are relative to /media/<theme>/. Each entry is a filename or a list tried in order (video first, then still). Missing files fall back to a gradient + the animated overlay. Hero: 16:9 video (1920x1080, muted loop) + poster. Stages: 16:9 stills 1376x768 (.webp) or short muted loops (.mp4).",
+  "_doc": "Landing-page media (Google Flow). Paths are relative to /media/<theme>/. A value is a filename or a list tried in order. Hero: 1280x720 H.264 8 s loop (crossfaded at the loop point) + poster for reduced motion. Stages: 1376x768 16:9 stills. Missing files fall back to a gradient + the animated overlay.",
   "dark": {
-    "hero": ["hero.mp4"],
-    "hero-poster": ["hero-poster.webp"],
-    "sense": ["sense.mp4", "sense.webp"],
-    "measure": ["measure.mp4", "measure.webp"],
-    "identify": ["identify.mp4", "identify.webp"],
-    "optimise": ["optimise.mp4", "optimise.webp"],
-    "prove": ["prove.mp4", "prove.webp"]
+    "hero": "hero.mp4",
+    "hero-poster": "hero-poster.webp",
+    "sense": "sense.webp",
+    "measure": "measure.webp",
+    "identify": "identify.webp",
+    "optimise": "optimise.webp",
+    "prove": "prove.webp"
   },
   "light": {
-    "hero": ["hero.mp4"],
-    "hero-poster": ["hero-poster.webp"],
-    "sense": ["sense.mp4", "sense.webp"],
-    "measure": ["measure.mp4", "measure.webp"],
-    "identify": ["identify.mp4", "identify.webp"],
-    "optimise": ["optimise.mp4", "optimise.webp"],
-    "prove": ["prove.mp4", "prove.webp"]
+    "hero": "hero.mp4",
+    "hero-poster": "hero-poster.webp",
+    "sense": "sense.webp",
+    "measure": "measure.webp",
+    "identify": "identify.webp",
+    "optimise": "optimise.webp",
+    "prove": "prove.webp"
   }
 }
