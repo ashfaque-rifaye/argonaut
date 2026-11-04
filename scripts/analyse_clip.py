@@ -39,4 +39,5 @@ async def main(path, name):
         print("proposal:", round(p["current"]["speed_rpm"]), "->", round(p["proposed"]["speed_rpm"]), p["expected"])
 
 
-asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else "Asset"))
+if __name__ == "__main__":
+    asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else "Asset"))

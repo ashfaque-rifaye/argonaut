@@ -17,9 +17,10 @@ All code in this repository was written from scratch starting **2026-11-01**. Th
 | 2026-11-03 | Hardening: streaming engine (per-frame incremental tracking, 10 Hz telemetry, latency budget); audio-guided de-aliasing; confidence intervals and robust resonance probability; closed-loop RTO with Bayesian twin update and trust region; significance-tested verification; numeric provenance checker for agent output |
 | 2026-11-03 | Kinematic inference (docs/KINEMATICS.md): Muse Spark kinematic model, forcing-frequency families, mains-frequency detection, Bayesian harmonic-sieve speed posterior with Occam factor and physics priors, log-odds fault posterior with speed-uncertainty mixing, Muse Wonder what-if tool; synthetic fault evaluation; 5 more real machine clips (two diesel gensets, two washing machines, a centrifugal pump); console sample strip and drag-and-drop upload |
 | 2026-11-04 | Agents that act (argonaut/actions.py): influence-coefficient field balancing with ISO 21940-11 check, VFD skip-frequency lock-out with read-back test, ISO 14224 work orders, impact and follow-up; simulated drive gains an unbalance vector, balancing masses, keyphasor 1x phase and skip bands over Modbus; operator approvals API; live camera feeds (RTSP/HTTP) with MJPEG relay; console redesign (glass, large footage, welcome sheet with sample / upload / live feed, guided tour, panel explanations); intro and outro films (film/) |
+| 2026-11-04 | Shot-aware video tracking (`argonaut/track.py`), measurement inside moving masks, live entity labels, footage sound, real Voice Transcribe and Muse Spark Open runs, hosted backend with public limits (`argonaut/guard.py`), demo re-cut. |
 
 ## Pre-existing tools and libraries (not our work)
-- Meta Model API and models: Muse Spark, Muse Wonder, SAM 3.1, Muse Voice Transcribe, and Muse Spark Open via Baseten
+- Meta Model API and models: Muse Spark, Muse Wonder, SAM 3.1, Muse Voice Transcribe, and Muse Spark Open (open weights, via the Hugging Face router)
 - Open-source libraries listed in `pyproject.toml` (OpenAI Python SDK, OpenCV, NumPy, SciPy, httpx, websockets, meta-sam-parser, pymodbus); Playwright (film rendering only)
 
 ## Not reused

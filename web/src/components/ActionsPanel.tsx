@@ -1,3 +1,4 @@
+import { apiUrl } from '../lib/showcase'
 import { useState } from 'react'
 import { Bot, CalendarClock, Check, ChevronRight, ClipboardList, Download, Gauge, Loader2, PlugZap, Scale, ShieldBan, Sparkles, X } from 'lucide-react'
 import { useStore } from '../lib/store'
@@ -98,7 +99,7 @@ function WorkOrderCard({ a, wo }: { a: ActionEvent; wo: WorkOrder }) {
   const sid = useStore((s) => s.sessionId)
   const live = useStore((s) => s.mode === 'live')
   const md = a.result?.markdown as string | undefined
-  const href = live && sid ? `/api/sessions/${encodeURIComponent(sid)}/actions/${a.id}/workorder.md` : md ? `data:text/markdown;charset=utf-8,${encodeURIComponent(md)}` : undefined
+  const href = live && sid ? apiUrl(`/api/sessions/${encodeURIComponent(sid)}/actions/${a.id}/workorder.md`) : md ? `data:text/markdown;charset=utf-8,${encodeURIComponent(md)}` : undefined
   return (
     <div className="mt-2 rounded-[9px] border border-line-1 bg-bg-0/40 p-2">
       <div className="flex flex-wrap items-center gap-1.5">

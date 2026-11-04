@@ -1,0 +1,13 @@
+.git
+.venv
+web
+deploy
+film
+docs
+scripts
+tests
+data/raw
+data/runs
+.env
+.env.*
+**/__pycache__

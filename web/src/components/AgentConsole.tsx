@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, BrainCircuit, Check, CircleCheck, Image as ImageIcon, Info, Mic, OctagonAlert, ShieldCheck, Sigma, Sparkles, TriangleAlert, Waves, X } from 'lucide-react'
+import { ArrowUp, BrainCircuit, Check, CircleCheck, Image as ImageIcon, Info, Mic, OctagonAlert, ShieldCheck, Sigma, Sparkles, TriangleAlert, Waves, X, Lock } from 'lucide-react'
 import { useStore, type ConsoleItem } from '../lib/store'
 import { link } from '../lib/socket'
 import type { AgentClaim, DiagnosisEvent, Evidence } from '../lib/protocol'
@@ -252,10 +252,11 @@ export function AgentConsole() {
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [items])
 
+  const [priv, setPriv] = useState(false)
   const send = (t: string) => {
     const v = t.trim()
     if (!v) return
-    link.send({ type: 'chat', text: v })
+    link.send({ type: 'chat', text: v, private: priv })
     setText('')
     stick.current = true
   }
@@ -310,6 +311,16 @@ export function AgentConsole() {
             placeholder="Ask Argonaut, or say “Argonaut, …”"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-fg-1 placeholder:text-fg-4 focus:outline-none"
           />
+          <button
+            type="button"
+            onClick={() => setPriv(!priv)}
+            aria-pressed={priv}
+            data-tip={priv ? 'Private mode on: the agent reasons on open-weight Muse Spark Open' : 'Private mode: reason on open-weight Muse Spark Open instead of Muse Wonder'}
+            aria-label="Private mode"
+            className={cx('flex h-6 w-6 items-center justify-center rounded-[5px] transition-colors', priv ? 'bg-[var(--accent-dim)] text-accent-2' : 'text-fg-3 hover:bg-bg-3 hover:text-fg-1')}
+          >
+            <Lock size={12} />
+          </button>
           <button type="submit" disabled={!text.trim()} className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-bg-3 text-fg-2 transition-colors hover:bg-accent hover:text-on-accent disabled:opacity-40">
             <ArrowUp size={13} />
           </button>

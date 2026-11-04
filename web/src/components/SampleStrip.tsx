@@ -5,10 +5,11 @@ import type { LibraryClip } from '../lib/protocol'
 import { chooseFile, loadLibrary, openRecorded, recordedRunId, startPlay } from '../lib/library'
 import { kindIcon } from './SourceDrawer'
 import { cx } from './ui'
+import { SHOWCASE } from '../lib/showcase'
 
 /** One real clip per machine type first (fan, engine, washer, pump, motor...), then the rest. */
 function ordered(clips: LibraryClip[]): LibraryClip[] {
-  const real = clips.filter((c) => c.real)
+  const real = SHOWCASE ? clips : clips.filter((c) => c.real)
   const seen = new Set<string>()
   const first: LibraryClip[] = []
   const rest: LibraryClip[] = []
@@ -65,12 +66,12 @@ export function SampleStrip() {
     return () => window.clearTimeout(t)
   }, [libraryState])
   if (!clips?.length) return null
-  const list = ordered(clips)
+  const list = ordered(SHOWCASE ? clips.filter((c) => !!recordedRunId(c, runs)) : clips)
 
   const play = (c: LibraryClip) => {
     const run = recordedRunId(c, runs)
     // live backend: analyse for real; replay pages (no backend session) open the recorded run if there is one
-    if (mode !== 'live' && run) openRecorded(run)
+    if ((mode !== 'live' || SHOWCASE) && run) openRecorded(run)
     else void startPlay(c, 'analyse')
   }
 

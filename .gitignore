@@ -34,3 +34,8 @@ scripts/_*.py
 # film renderer
 film/node_modules/
 film/out/frames-*/
+deploy/
+.vercel/
+film/out/*.wav
+film/demo/out/
+film/out/argonaut-demo.mp4

@@ -92,6 +92,12 @@ All messages are JSON with a `type` field. Units are SI unless the field name sa
 {"type":"coach", "level":"ok"|"warn"|"block", "text":"Move 30 cm closer; nameplate unreadable"}
 
 {"type":"error", "message":"..."}
+
+// moving camera only: parts tracked through the video. polys[i] is the outline at frame i / fps (32 vertices that
+// correspond from frame to frame), or null while the part is out of the picture. ids match sensors and telemetry channels.
+{"type":"tracks", "fps":10, "width":960, "height":540, "n":220, "shots":[0.0, 9.1, 14.6],
+ "items":[{"id":"s1", "label":"motor housing", "what":"drives the pump", "color":"#38BDF8", "confidence":0.92,
+           "polys":[[[120,40],...], null, ...]}]}
 ```
 
 ## Replay mode

@@ -6,19 +6,23 @@ Run:  uv run uvicorn argonaut.server:app --port 8000
 import asyncio
 import base64
 import json
+import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from . import guard
 from .live import LiveEngine
 from .models import client as mc
 from .pipeline import RUNS, Session
 
 app = FastAPI(title="Argonaut")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# A public deployment answers only the showcase site; a local one anything (the Vite dev server, a plant's own UI).
+app.add_middleware(CORSMiddleware, allow_origin_regex=r"https://argonaut[-\w]*\.vercel\.app" if guard.PUBLIC else ".*",
+                   allow_methods=["*"], allow_headers=["*"])
 
 SESSIONS: dict[str, Session] = {}
 LIVE: dict[str, LiveEngine] = {}
@@ -49,11 +53,18 @@ def _plant_client():
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "meta_api": mc.available(), "baseten": mc.baseten() is not None}
+    return {"ok": True, "meta_api": mc.available(), "open_weights": mc.open_weights() is not None, "public": guard.PUBLIC}
 
 
 @app.post("/api/sessions")
 async def new_session(body: NewSession):
+    while guard.PUBLIC and len(SESSIONS) >= 50:  # forget the oldest visitor's session
+        old = next(iter(SESSIONS))
+        t = TASKS.pop(old, None)
+        if t:
+            t.cancel()
+        SESSIONS.pop(old)
+        LIVE.pop(old, None)
     sid = uuid.uuid4().hex[:8]
     s = Session(sid, body.asset_name)
     s.plant = await asyncio.to_thread(_plant_client)
@@ -62,17 +73,27 @@ async def new_session(body: NewSession):
 
 
 @app.post("/api/sessions/{sid}/clip")
-async def upload_clip(sid: str, file: UploadFile = File(...), realtime: float = 1.0, verify: bool = False):
-    s = SESSIONS[sid]
+async def upload_clip(request: Request, sid: str, file: UploadFile = File(...), realtime: float = 1.0, verify: bool = False):
+    s = SESSIONS.get(sid)
+    if s is None:
+        raise HTTPException(404, "session expired, reload the page")
+    guard.admit(request)
     dest = s.dir / f"clip_{uuid.uuid4().hex[:6]}{Path(file.filename or 'x.mp4').suffix or '.mp4'}"
+    if guard.PUBLIC and (file.size or 0) > guard.MAX_UPLOAD_MB * 1024 * 1024:
+        guard.check_clip(0, file.size)
     dest.write_bytes(await file.read())
     import cv2
     cap = cv2.VideoCapture(str(dest))
     meta = {"fps": cap.get(cv2.CAP_PROP_FPS), "frames": cap.get(cv2.CAP_PROP_FRAME_COUNT),
             "width": cap.get(cv2.CAP_PROP_FRAME_WIDTH), "height": cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}
     cap.release()
+    try:
+        guard.check_clip(meta["frames"] / max(meta["fps"], 1), dest.stat().st_size)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
     coro = s.verify_clip(str(dest)) if verify else s.analyse_clip(str(dest), realtime=realtime)
-    TASKS[sid] = asyncio.create_task(_guard(s, coro))
+    TASKS[sid] = guard.track(asyncio.create_task(_guard(s, coro)))
     return {"clip_id": dest.stem, "fps": meta["fps"], "duration_s": meta["frames"] / max(meta["fps"], 1),
             "width": meta["width"], "height": meta["height"]}
 
@@ -226,8 +247,9 @@ class Play(BaseModel):
 
 
 @app.post("/api/sessions/{sid}/play")
-async def play(sid: str, body: Play):
+async def play(request: Request, sid: str, body: Play):
     """Run a library clip through the real pipeline in real time; the console plays the same video (media event)."""
+    guard.admit(request)
     s = SESSIONS.get(sid) or SESSIONS.setdefault(sid, Session(sid, "Asset"))
     clip = next((c for c in _library() if c["id"] == body.clip_id), None)
     if clip is None:
@@ -240,7 +262,7 @@ async def play(sid: str, body: Play):
     if body.mode == "stream":
         TASKS[sid] = asyncio.create_task(_guard(s, _stream_file(s, sid, path, clip)))
     else:
-        TASKS[sid] = asyncio.create_task(_guard(s, s.analyse_clip(path, realtime=1.0, clip_id=clip["id"])))
+        TASKS[sid] = guard.track(asyncio.create_task(_guard(s, s.analyse_clip(path, realtime=1.0, clip_id=clip["id"]))))
     return {"ok": True, "clip": clip, "mode": body.mode}
 
 
@@ -299,11 +321,13 @@ class Feed(BaseModel):
 
 
 @app.post("/api/sessions/{sid}/feed")
-async def connect_feed(sid: str, body: Feed):
+async def connect_feed(request: Request, sid: str, body: Feed):
     """Connect a live camera feed (RTSP / HTTP(S) / HLS stream, or a camera index) and run it through the
     live engine. The browser shows it as MJPEG from /api/sessions/{sid}/feed.mjpg (it cannot play RTSP)."""
     import cv2
 
+    guard.check_feed_url(body.url)
+    guard.admit(request)
     s = SESSIONS.get(sid) or SESSIONS.setdefault(sid, Session(sid, "Asset"))
     src = int(body.url) if body.url.strip().isdigit() else body.url.strip()
     cap = await asyncio.to_thread(cv2.VideoCapture, src)
@@ -314,7 +338,7 @@ async def connect_feed(sid: str, body: Feed):
     if old and not old.done():
         old.cancel()
     s.asset_name = body.name or "Live feed"
-    TASKS[sid] = asyncio.create_task(_guard(s, _stream_feed(s, sid, cap, body.name or str(body.url))))
+    TASKS[sid] = guard.track(asyncio.create_task(_guard(s, _stream_feed(s, sid, cap, body.name or str(body.url)))))
     return {"ok": True}
 
 
@@ -334,6 +358,9 @@ async def _stream_feed(s: Session, sid: str, cap, name: str):
             if not ok:
                 break
             t = _t.perf_counter() - t0
+            if guard.PUBLIC and t > guard.LIVE_LIMIT_S:
+                name = f"{name} (public demo limit of {guard.LIVE_LIMIT_S:.0f} s)"
+                break
             await eng.push_image(t, fr)
             if t - last_jpg >= 0.08:  # ~12 fps preview for the browser
                 ok2, buf = cv2.imencode(".jpg", fr, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -341,7 +368,7 @@ async def _stream_feed(s: Session, sid: str, cap, name: str):
                     FEED_JPEG[sid] = buf.tobytes()
                 last_jpg = t
             n += 1
-            await asyncio.sleep(0)
+            await asyncio.sleep(max(0.0, n / fps - (_t.perf_counter() - t0)))
     finally:
         cap.release()
     await s.emit({"type": "coach", "level": "warn", "clip_end": True, "text": f"Live feed ended after {n} frames: {name}."})
@@ -394,10 +421,18 @@ async def ws_session(ws: WebSocket, sid: str):
         await push(ev)
     s.subscribe(push)
     voice = None
+    live_from = None  # a visitor's camera and microphone streaming through the models
     try:
         while True:
             msg = json.loads(await ws.receive_text())
             kind = msg.get("type")
+            if guard.PUBLIC and kind in ("frame", "audio"):
+                live_from = live_from or time.time()
+                if time.time() - live_from > guard.LIVE_LIMIT_S:
+                    if voice:
+                        await voice.stop()
+                        voice = None
+                    continue
             if kind == "frame":
                 eng = LIVE.setdefault(sid, LiveEngine(s))
                 await eng.push_frame(float(msg.get("t", 0)), msg["jpeg_b64"])
@@ -423,7 +458,9 @@ async def ws_session(ws: WebSocket, sid: str):
                 await _command(s, msg.get("name", ""))
             elif kind == "chat":
                 await s.emit({"type": "agent", "role": "user", "text": msg.get("text", ""), "final": True})
-                asyncio.create_task(_guard(s, s.run_agent()))
+                if guard.PUBLIC and not s.ident:
+                    continue  # nothing measured yet: nothing for the agent to reason on
+                asyncio.create_task(_guard(s, s.run_agent(private=bool(msg.get("private")))))
     except WebSocketDisconnect:
         pass
     finally:
@@ -451,13 +488,18 @@ async def ws_replay(ws: WebSocket, run_id: str, speed: float = 1.0):
         await ws.send_text(json.dumps({"type": "error", "message": f"no run {run_id}"}))
         await ws.close()
         return
-    last_t = None
+    last_t = last_clip = None
     try:
         for line in path.read_text(encoding="utf-8").splitlines():
             ev = json.loads(line)
             t = ev.get("t")
-            if last_t is not None and t is not None and t > last_t:
+            clip_t = ev.get("clip_t") if ev.get("type") == "telemetry" else None
+            if clip_t is not None and last_clip is not None and clip_t > last_clip:
+                # telemetry walks the clip: pace by clip time, so the charts stay in step with the footage
+                await asyncio.sleep((clip_t - last_clip) / max(speed, 1e-3))
+            elif clip_t is None and last_t is not None and t is not None and t > last_t:
                 await asyncio.sleep(min(2.0, (t - last_t) / max(speed, 1e-3)))
+            last_clip = clip_t if clip_t is not None else last_clip
             last_t = t if t is not None else last_t
             await ws.send_text(line)
     except WebSocketDisconnect:

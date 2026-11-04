@@ -18,6 +18,7 @@ import type {
   PipelineStage,
   ProposalEvent,
   SensorsEvent,
+  TracksEvent,
   ServerMessage,
   SpectrumEvent,
   TelemetryEvent,
@@ -25,6 +26,7 @@ import type {
   WaterfallEvent,
 } from './protocol'
 import { PIPELINE_STAGES, STAGE_META } from './protocol'
+import { apiUrl } from './showcase'
 
 export type AppMode = 'live' | 'replay' | 'mock'
 export type ConnState = 'connecting' | 'open' | 'reconnecting' | 'closed'
@@ -104,6 +106,7 @@ interface State {
 
   pipeline: Record<PipelineStage, StageState>
   sensors: SensorsEvent | null
+  tracks: TracksEvent | null
   telemetry: TelemetryEvent | null
   hist: TelemetryHistory
   spectra: Record<string, SpectrumEvent>
@@ -117,6 +120,8 @@ interface State {
   mediaKind: 'video' | 'mjpeg'
   welcomeOpen: boolean
   tourStep: number | null
+  /** the visitor chose a source themselves: no tour over their analysis */
+  pickedSource: boolean
   focusView: boolean
   asset: AssetEvent | null
   diagnoses: DiagnosisEvent[]
@@ -228,6 +233,7 @@ const initial = () => ({
   msgRate: 0,
   pipeline: initialPipeline(),
   sensors: null,
+  tracks: null,
   telemetry: null,
   hist: { speed: [], overall: [], channels: {}, latency: [] } as TelemetryHistory,
   spectra: {} as Record<string, SpectrumEvent>,
@@ -311,6 +317,7 @@ export const useStore = create<State>((set, get) => ({
   sourceOpen: false,
   welcomeOpen: false,
   tourStep: null,
+  pickedSource: false,
   focusView: false,
   ...initial(),
 
@@ -340,7 +347,10 @@ export const useStore = create<State>((set, get) => ({
         return
       }
       case 'sensors':
-        set({ msgCount, sensors: m })
+        set({ msgCount, sensors: m, tracks: null })
+        return
+      case 'tracks':
+        set({ msgCount, tracks: m })
         return
       case 'media': {
         // match the media to a library clip (clip_id from /play, else by URL: analyse mode and older replays)
@@ -359,7 +369,7 @@ export const useStore = create<State>((set, get) => ({
         }
         set({
           msgCount,
-          mediaUrl: m.url,
+          mediaUrl: apiUrl(m.url),
           mediaKind: m.kind === 'mjpeg' ? 'mjpeg' : 'video',
           nowPlaying,
           // a library clip replaces a local file; an unknown URL (the server's copy of an upload) keeps it
@@ -544,3 +554,5 @@ setInterval(() => {
   const rate = s.msgCount - prev
   if (rate !== s.msgRate) useStore.setState({ msgRate: rate })
 }, 1000)
+
+if (new URLSearchParams(location.search).has('hooks')) (window as unknown as { __argo: typeof useStore }).__argo = useStore

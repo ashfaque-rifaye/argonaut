@@ -40,7 +40,7 @@ The agent never produces a number. Every number it writes is checked against too
   - Without a nameplate speed, the microphone can't tell which shaft order it hears. The camera's aliases decide it, and that decision is sensitive to sensor placement under heavy hand shake: −37 ± 34% across perturbed regions on the 60 fps shake test. Muse Spark reading the nameplate removes the ambiguity.
   - Motions below about 0.03 px are attenuated by H.264 and by the tracker (median gain 0.8–0.9).
 - **Fault posterior on synthetic ground truth** (`scripts/fault_eval.py`): the top hypothesis matches the rendered fault on 6 of 6 clips (misalignment 0.86, cavitation 0.83, imbalance 0.56, coast-down resonance 0.73; nothing ≥ 0.5 on the balanced and the healthy clip).
-- **Real footage** (15 published clips in `data/library`: fans, diesel gensets, washing machines, pumps, motors, a rotor rig, a wind turbine, a bridge). Tachometer ground truth exists only where a display shows it:
+- **Real footage** (18 published clips in `data/library`: fans, pumps, motors, belts, a mine conveyor, diesel gensets, washing machines, a rotor rig, a wind turbine, a bridge). Tachometer ground truth exists only where a display shows it:
   - **Genset with a controller display (51.3 Hz / 1,542 rpm):** the microphone's kinematic posterior gives **1,542.4 rpm** without seeing the display (+0.03%). Without the four-stroke model it would read 771 rpm.
   - **1500 kVA genset:** every audio line is a multiple of 12.49 Hz; the measured 49.94 Hz generator line and the four-stroke half-order model give **1,498 rpm (P 0.98)** instead of 750.
   - **2.13 m exhaust fan:** with the 6 blades Muse Spark counted, **413 rpm (P 0.97)**; without the count, 2,477 rpm (the blade pass read as 1×).
@@ -139,7 +139,7 @@ Answering these normally needs four things: an impact-hammer modal test, a run-u
 | **Muse Spark** (1.2 for audio) | Understands the scene and sound together, reads the nameplate and pump-curve PDF, coaches the capture, cross-checks against the audio |
 | **Muse Wonder** | Plans the identification experiment ("do a coast-down"), runs the optimizer through tools, explains the decision with evidence, and re-plans when verification fails |
 | **Muse Voice Transcribe** | Realtime, code-switched, hands-free control on the plant floor ("Argonaut, start a coast-down") |
-| **Muse Spark Open** (Baseten) | Private mode: the reasoning runs on open weights, so plant data stays in the plant (open-weight prize) |
+| **Muse Spark Open** (open weights) | Private mode: the reasoning runs on open weights, so plant data stays in the plant (open-weight prize) |
 | **Muse Image** (optional) | An asset "health and efficiency card" for the shareable report |
 
 ## 5. Demo (cheap rig, real physics)

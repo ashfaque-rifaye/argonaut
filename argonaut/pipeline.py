@@ -103,7 +103,9 @@ class Session:
 
         scene = None
         file_id = None
+        tracks = None
         if mc.available():
+            from . import track
             from .models import sam, spark
             upload = asyncio.create_task(spark.upload(path, self.emit))
             try:
@@ -113,6 +115,14 @@ class Session:
                 self.scene = scene
             except Exception as e:
                 await self.emit({"type": "error", "message": f"scene understanding failed: {e}"})
+            # A camera that moves needs sensors that move: Spark re-reads each shot, SAM 3.1 tracks through it.
+            if regions is None and not self.sensor_prompts and await asyncio.to_thread(track.camera_travel, path) >= track.MOVING:
+                try:
+                    tracks = await track.build_tracks(path, w, h, (scene or {}).get("sensor_prompts"), self.emit)
+                except Exception as e:
+                    await self.emit({"type": "error", "message": f"video tracking failed, using fixed masks: {e}"})
+                if tracks:
+                    regions = track.regions_from_tracks(tracks, (h, w))
             if regions is None:
                 prompts = self.sensor_prompts or (scene or {}).get("sensor_prompts") or ["machine"]
                 ref = (scene or {}).get("reference_prompt") or "wall"
@@ -129,7 +139,8 @@ class Session:
         if not regions:
             regions = _fallback_regions(w, h)
         # Scale is "calibrated" only if it came from the caller or from a credible reference object.
-        self.scale_calibrated = bool(mm_per_px) and 0.02 <= mm_per_px <= 5.0
+        # With a moving camera the scale changes shot to shot, so amplitudes there are relative.
+        self.scale_calibrated = bool(mm_per_px) and 0.02 <= mm_per_px <= 5.0 and not tracks
         mm_per_px = mm_per_px or 0.5
         from .models.sam import sensors_event
         try:
@@ -139,11 +150,16 @@ class Session:
         except ValueError:
             pass  # clip outside the project: no playback URL
         await self.emit(sensors_event(regions, w, h))
+        if tracks:
+            await self.emit(track.tracks_event(tracks))
         await self.emit(self._asset_event())
 
         # --- motion of every virtual sensor
         t_dsp = time.perf_counter()
-        motion = await asyncio.to_thread(measure_regions, frames, regions)
+        if tracks:
+            motion = await asyncio.to_thread(track.measure_tracked, frames, fps, tracks)
+        else:
+            motion = await asyncio.to_thread(measure_regions, frames, regions)
         chans = [r for r in regions if not r.is_reference]
         rejected = [r for r in chans if not motion[r.id]["quality"].get("rigid", True)]
         if rejected and len(rejected) < len(chans):
@@ -184,7 +200,10 @@ class Session:
         sp, conf = identify.track_speed(tt, f, S, f_range=(1.0, fmax / 1.5), start_hint=hint)
         speed_source = "video"
         wf_sel = f <= min(WATERFALL_FMAX, fps / 2)
-        wf_rows = spectral.to_uint8_db(S[:, wf_sel])
+        wf_rows = {main.id: spectral.to_uint8_db(S[:, wf_sel])}
+        for r in chans:
+            if r.id != main.id:
+                wf_rows[r.id] = spectral.to_uint8_db(spectral.stft_amp(disp_mm[r.id], fps, win_s=min(1.0, len(x) / fps / 4), hop_s=0.25)[2][:, wf_sel])
         mic_wf = None
         if audio is not None and len(audio) > 24000 * 2:
             tone, aconf, mic_wf, tone_k = await asyncio.to_thread(A.acoustic_track, audio, 24000, tt,
@@ -247,7 +266,9 @@ class Session:
             post = await asyncio.to_thread(KIN.speed_posterior, fk, ak, self.kin, line=self.line)
             self.speed_post = post
             if post and not hint and post["p_map"] >= 0.8 and speed_source.startswith("audio"):
-                ref = float(np.median(sp[-8:] if sp[-1] >= sp[0] else sp[:8]))
+                # the posterior describes the steady window, so scale against the same end of the track
+                ref = float(np.median(sp[-8:] if at_end else sp[:8]))
+                self._steady_at_end = at_end if sweep_all >= 0.3 else None
                 r = post["map_hz"] / max(ref, 1e-6)
                 q = min(ORDER_RATIOS, key=lambda q: abs(r / q - 1))
                 # Same order (r ~ 1), another order (r ~ rational) or, when near-certain, an unrelated line
@@ -256,11 +277,14 @@ class Session:
                     sp = sp * r
                     speed_source += (" · refined by kinematic posterior" if abs(r - 1) < 0.03
                                      else f" · kinematic posterior (×{r:.3g})")
+        if self.speed_post and self.speed_post.get("ambiguous") and not hint:
+            speed_source += " · ambiguous"
         self._speed_source = speed_source
 
         # Progressive emission (feels live; also the replay timeline).
         cls = severity.machine_class(self.nameplate.get("kw") or None)
         win = max(16, int(fps * 1.0))
+        held: dict[str, dict] = {}
         for i, tc in enumerate(tt):
             n1 = min(len(x), int(tc * fps + win / 2))
             n0 = max(0, n1 - 2 * win)
@@ -268,8 +292,12 @@ class Session:
             for r in chans:
                 seg = disp_mm[r.id][n0:n1]
                 v = spectral.band_rms_velocity(seg, fps, band=(2.0, fps / 2))
-                ch.append({"id": r.id, "disp_mm_rms": float(np.std(seg)), "vel_mm_s_rms": v,
-                           "iso_zone": severity.zone(v, cls)})
+                c = {"id": r.id, "disp_mm_rms": float(np.std(seg)), "vel_mm_s_rms": v,
+                     "peak_hz": _peak_hz(seg, fps), "iso_zone": severity.zone(v, cls)}
+                if tracks and v < 1e-6 and r.id in held:  # out of the picture: keep its last reading, not a false zero
+                    c = held[r.id]
+                held[r.id] = c
+                ch.append(c)
             overall = max(c["vel_mm_s_rms"] for c in ch)
             calibrated = self.scale_calibrated and overall < PLAUSIBLE_MAX_MM_S
             seg_v = spectral.segment_rms_velocity(disp_mm[main.id][n0:n1], fps, (2.0, fps / 2), n_seg=4)
@@ -279,14 +307,18 @@ class Session:
                              "band": DA.usable_band(fps, float(sp[i]) if speed_source.startswith("audio") else None),
                              "iso_zone": severity.zone(overall, cls) if calibrated else None,
                              "calibrated": calibrated})
-            await self.emit({"type": "waterfall", "clip_t": float(tc), "channel": main.id,
-                             "f_max_hz": float(f[wf_sel][-1]), "row": wf_rows[i].tolist()})
+            for cid, rows in wf_rows.items():
+                await self.emit({"type": "waterfall", "clip_t": float(tc), "channel": cid,
+                                 "f_max_hz": float(f[wf_sel][-1]), "row": rows[i].tolist()})
             if mic_wf is not None:
                 j = int(np.argmin(np.abs(mic_wf[0] - tc)))
                 await self.emit({"type": "waterfall", "clip_t": float(tc), "channel": "mic",
                                  "f_max_hz": float(mic_wf[1][-1]), "row": mic_wf[2][j][::4].tolist()})
             if i % 2 == 0:
                 await self._emit_spectrum(main.id, x[n0:n1], fps, float(sp[i]), fa, aa, float(tc))
+                for r in chans:
+                    if r.id != main.id:
+                        await self._emit_spectrum(r.id, disp_mm[r.id][n0:n1], fps, float(sp[i]), fa, aa, float(tc))
             await asyncio.sleep(0.25 / max(realtime, 1e-3))
 
         if getattr(self, "_last_dealias", None):
@@ -337,8 +369,10 @@ class Session:
     async def _identify(self, tt, f, S, sp, conf, fps, disp_mm, chans, fa, aa, cav, x, cls):
         t_id = time.perf_counter()
         sweep = float(np.ptp(sp) / max(np.max(sp), 1e-6))
-        # Operating point = speed before a coast-down, or after a run-up.
-        op = slice(0, 4) if sp[0] > sp[-1] else slice(-4, None)
+        # Operating point = speed before a coast-down, or after a run-up. A swept clip the kinematic
+        # posterior has settled uses the window it found steady (a noisy first tone can look like a coast-down).
+        at_end = getattr(self, "_steady_at_end", None)
+        op = slice(-4, None) if (at_end if at_end is not None else sp[0] <= sp[-1]) else slice(0, 4)
         orders = {}
         for k in (1, 2, 3):
             amp = identify.order_amplitude(f, S, sp, k)
@@ -539,7 +573,7 @@ class Session:
                              "title": args["title"], "summary": args["summary"],
                              "evidence": [_evidence(e) for e in args.get("evidence", [])],
                              "confidence": args.get("confidence", 0.5),
-                             "model": mc.OPEN_WEIGHTS if private else mc.WONDER})
+                             "model": mc.OPEN_WEIGHTS if private and mc.open_weights() else mc.WONDER})
             return {"ok": True}
 
         async def test_kinematic_hypothesis(args):
@@ -573,7 +607,7 @@ class Session:
             elif kind not in ("impact", "followup"):
                 return {"error": f"unknown action kind {kind}"}
             a = await self.actions.propose(kind, args.get("title") or kind, args.get("rationale", ""), params,
-                                           proposer=mc.OPEN_WEIGHTS if private else mc.WONDER)
+                                           proposer=mc.OPEN_WEIGHTS if private and mc.open_weights() else mc.WONDER)
             return {"action_id": a["id"], "status": a["status"],
                     "note": ("waiting for operator approval" if a["status"] == "proposed" else
                              "no drive connected: include the procedure in a work order instead" if a["status"] == "needs_drive"
@@ -582,7 +616,7 @@ class Session:
 
         async def propose_setpoint(args):
             r = getattr(self, "_last_opt", None) or optimise(self.twin)
-            return await self._emit_proposal(r, args.get("rationale", ""), mc.OPEN_WEIGHTS if private else mc.WONDER)
+            return await self._emit_proposal(r, args.get("rationale", ""), mc.OPEN_WEIGHTS if private and mc.open_weights() else mc.WONDER)
 
         try:
             await agent.run({"get_identification": get_identification, "run_optimiser": run_optimiser,
@@ -716,6 +750,17 @@ def _evidence(ref: str) -> dict:
     except ValueError:
         pass
     return {"kind": "metric", "name": str(ref), "value": "", "err": None}
+
+
+def _peak_hz(seg: np.ndarray, fps: float) -> float | None:
+    """Strongest line in a sensor's current window (2 Hz up to the camera's Nyquist), or None when it has no line."""
+    if len(seg) < 16 or np.std(seg) < 1e-9:
+        return None
+    f, a = spectral.amp_spectrum(seg - np.mean(seg), fps)
+    sel = f >= 2.0
+    if not sel.any() or a[sel].max() < 3 * np.median(a[sel]):
+        return None
+    return float(f[sel][np.argmax(a[sel])])
 
 
 def _first_color_frame(path: str, scale: float) -> np.ndarray:

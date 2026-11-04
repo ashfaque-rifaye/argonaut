@@ -7,6 +7,7 @@ real models working in real time.
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from dotenv import load_dotenv
@@ -20,7 +21,9 @@ SPARK_AUDIO = "muse-spark-1.2"  # 1.3 audio understanding is not fully supported
 WONDER = "muse-wonder-1.0"
 SAM = "sam-3.1"
 VOICE = "muse-voice-transcribe-1.0"
-OPEN_WEIGHTS = os.environ.get("BASETEN_MODEL", "meta-models/muse-spark-open-1026")
+# Muse Spark Open on any OpenAI-compatible endpoint: yours, Baseten (BASETEN_*) or the Hugging Face router (HF_TOKEN).
+OPEN_WEIGHTS = (os.environ.get("OPEN_MODEL") or
+                ("meta-models/muse-spark-open-1026" if os.environ.get("BASETEN_API_KEY") else "meta-models/Muse-Spark-Open-816B-A42B"))
 
 Emit = Callable[[dict], Awaitable[None]]
 
@@ -34,7 +37,7 @@ def available() -> bool:
 
 
 _meta: AsyncOpenAI | None = None
-_baseten: AsyncOpenAI | None = None
+_open: AsyncOpenAI | None = None
 
 
 def meta() -> AsyncOpenAI:
@@ -44,15 +47,28 @@ def meta() -> AsyncOpenAI:
     return _meta
 
 
-def baseten() -> AsyncOpenAI | None:
-    global _baseten
-    key = os.environ.get("BASETEN_API_KEY", "")
-    if not key:
-        return None
-    if _baseten is None:
-        _baseten = AsyncOpenAI(base_url=os.environ.get("BASETEN_BASE_URL", "https://inference.baseten.co/v1"),
-                               api_key=key, timeout=180, max_retries=2)
-    return _baseten
+def _hf_token() -> str:
+    tok = os.environ.get("HF_TOKEN", "")
+    if tok:
+        return tok
+    cached = Path.home() / ".cache" / "huggingface" / "token"
+    return cached.read_text().strip() if cached.exists() else ""
+
+
+def open_weights() -> AsyncOpenAI | None:
+    """Client for private mode, or None when no open-weights endpoint is configured."""
+    global _open
+    if _open is None:
+        if os.environ.get("OPEN_API_KEY"):
+            url, key = os.environ.get("OPEN_BASE_URL", "http://localhost:8080/v1"), os.environ["OPEN_API_KEY"]
+        elif os.environ.get("BASETEN_API_KEY"):
+            url, key = os.environ.get("BASETEN_BASE_URL", "https://inference.baseten.co/v1"), os.environ["BASETEN_API_KEY"]
+        else:
+            url, key = "https://router.huggingface.co/v1", _hf_token()
+        if not key:
+            return None
+        _open = AsyncOpenAI(base_url=url, api_key=key, timeout=180, max_retries=2)
+    return _open
 
 
 async def _noop(_: dict) -> None:

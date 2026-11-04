@@ -35,7 +35,7 @@ function SpeedSourceBadge({ src }: { src: string }) {
   if (!src) return null
   const audioOnly = src.startsWith('audio')
   const detail = /\((.+)\)/.exec(src)?.[1]
-  const text = audioOnly ? `mic tachometer${detail ? ` · ${detail}` : ''}` : src === 'video' ? 'optical tach · video' : src.includes('video') && src.includes('audio') ? 'fused · video + audio' : src === 'none' ? 'no rotation' : src
+  const text = src.includes('ambiguous') ? 'mic tachometer · speed ambiguous' : audioOnly ? `mic tachometer${detail ? ` · ${detail}` : ''}` : src === 'video' ? 'optical tach · video' : src.includes('video') && src.includes('audio') ? 'fused · video + audio' : src === 'none' ? 'no rotation' : src
   return (
     <span
       title={`speed_source: ${src}`}

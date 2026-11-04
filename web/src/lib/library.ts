@@ -2,8 +2,9 @@
 // source switches the Live view offers (library clip, device camera, local file, simulator).
 
 import type { LibraryClip, LibraryResponse, PlayMode, PlayResponse } from './protocol'
-import { link } from './socket'
+import { link, goLive } from './socket'
 import { useStore } from './store'
+import { SHOWCASE } from './showcase'
 
 export const PLAY_MODE_LABEL: Record<PlayMode, string> = {
   analyse: 'Analyse',
@@ -22,13 +23,13 @@ export function loadLibrary(force = false): Promise<LibraryClip[] | null> {
   if (!force && st.libraryState === 'ready' && st.library) return Promise.resolve(st.library)
   if (inflight) return inflight
   st.set({ libraryState: 'loading' })
-  void fetch('/api/runs')
+  void fetch(SHOWCASE ? '/static/runs.json' : '/api/runs')
     .then((r) => (r.ok ? r.json() : []))
     .then((runs: unknown) => Array.isArray(runs) && useStore.getState().set({ runs: runs.filter((x): x is string => typeof x === 'string') }))
     .catch(() => {})
   const ctl = new AbortController()
   const to = window.setTimeout(() => ctl.abort(), 4000)
-  inflight = fetch('/api/library', { signal: ctl.signal })
+  inflight = fetch(SHOWCASE ? '/static/library.json' : '/api/library', { signal: ctl.signal })
     .then(async (r) => {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       const ct = r.headers.get('content-type') ?? ''
@@ -67,6 +68,12 @@ export function fmtDuration(s?: number | null) {
 export async function startPlay(clip: LibraryClip, mode: PlayMode) {
   const st = useStore.getState()
   st.set({ sourceOpen: false, welcomeOpen: false })
+  if (SHOWCASE) {
+    const run = recordedRunId(clip, st.runs)
+    if (run) return openRecorded(run)
+    st.pushConsole({ kind: 'system', text: `${clip.title}: live analysis needs the Argonaut backend (see the README). This showcase plays recorded runs.` })
+    return
+  }
   if (st.mode !== 'live' || !st.sessionId) {
     const q = new URLSearchParams({ clip: clip.id, mode })
     const asset = new URLSearchParams(location.search).get('asset')
@@ -108,7 +115,7 @@ export async function startPlay(clip: LibraryClip, mode: PlayMode) {
 
 /** Recorded run of a library clip (Meta model output captured earlier): instant, no API key needed. */
 export const recordedRunId = (clip: LibraryClip, runs: string[]) => {
-  const id = `demo_real_${clip.id}`
+  const id = clip.run ?? `demo_real_${clip.id}`
   return runs.includes(id) ? id : null
 }
 export function openRecorded(runId: string) {
@@ -121,9 +128,12 @@ export function replay() {
   if (np) void startPlay(np.clip, np.mode)
 }
 
-export function chooseWebcam() {
+export async function chooseWebcam() {
   const st = useStore.getState()
-  st.set({ sourceOpen: false, welcomeOpen: false, videoSource: 'webcam', nowPlaying: null })
+  st.set({ pickedSource: true, sourceOpen: false, welcomeOpen: false })
+  if (SHOWCASE && !(await goLive())) return
+  st.resetAnalysis()
+  useStore.getState().set({ videoSource: 'webcam', nowPlaying: null })
 }
 
 export function chooseSim() {
@@ -134,7 +144,13 @@ export function chooseSim() {
 export async function chooseFile(f: File) {
   const st = useStore.getState()
   if (st.localClip) URL.revokeObjectURL(st.localClip.url)
-  st.set({ sourceOpen: false, welcomeOpen: false, videoSource: 'clip', nowPlaying: null, mediaKind: 'video', localClip: { url: URL.createObjectURL(f), name: f.name } })
+  // show the footage at once: the backend may need up to a minute to wake
+  st.resetAnalysis()
+  st.set({ pickedSource: true, sourceOpen: false, welcomeOpen: false, videoSource: 'clip', nowPlaying: null, mediaKind: 'video', assetName: f.name, localClip: { url: URL.createObjectURL(f), name: f.name } })
+  if (SHOWCASE && !(await goLive())) {
+    useStore.getState().pushConsole({ kind: 'system', text: `“${f.name}”: the live backend is not reachable right now, so your footage can't be analysed here. Recorded runs still work.` })
+    return
+  }
   try {
     const r = await link.uploadClip(f)
     if (r) useStore.getState().pushConsole({ kind: 'system', text: `Clip uploaded · ${r.width}×${r.height} @ ${r.fps.toFixed(0)} fps · ${r.duration_s.toFixed(1)} s` })

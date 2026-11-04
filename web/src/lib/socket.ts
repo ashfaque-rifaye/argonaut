@@ -18,48 +18,53 @@ import { isServerMessage } from './protocol'
 import { MockEngine } from './mock'
 import { useStore } from './store'
 import { autoStart, loadLibrary } from './library'
+import { API_ORIGIN, SHOWCASE, StaticReplay } from './showcase'
 
 /* ───────────────────────── REST ───────────────────────── */
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) {
+    // the server's own explanation when it has one (public demo limits, an expired session)
+    const detail = await res.json().then((b: { detail?: unknown }) => b.detail, () => null)
+    throw new Error(typeof detail === 'string' ? detail : `${res.status} ${res.statusText}`)
+  }
   return (await res.json()) as T
 }
 
 export const api = {
   createSession: (body: CreateSessionRequest, signal?: AbortSignal) =>
-    fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }).then((r) =>
+    fetch(`${API_ORIGIN}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }).then((r) =>
       json<CreateSessionResponse>(r),
     ),
   uploadClip: (id: string, file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    return fetch(`/api/sessions/${encodeURIComponent(id)}/clip`, { method: 'POST', body: fd }).then((r) => json<ClipUploadResponse>(r))
+    return fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/clip`, { method: 'POST', body: fd }).then((r) => json<ClipUploadResponse>(r))
   },
   uploadDatasheet: (id: string, file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    return fetch(`/api/sessions/${encodeURIComponent(id)}/datasheet`, { method: 'POST', body: fd }).then((r) => json<DatasheetUploadResponse>(r))
+    return fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/datasheet`, { method: 'POST', body: fd }).then((r) => json<DatasheetUploadResponse>(r))
   },
   approve: (id: string, body: ApproveRequest) =>
-    fetch(`/api/sessions/${encodeURIComponent(id)}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) =>
+    fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) =>
       json<ApproveResponse>(r),
     ),
   envelope: (id: string, body: EnvelopeRequest) =>
-    fetch(`/api/sessions/${encodeURIComponent(id)}/envelope`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) =>
+    fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/envelope`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) =>
       json<OkResponse>(r),
     ),
-  rtoStop: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/rto/stop`, { method: 'POST' }).then((r) => json<OkResponse>(r)),
-  report: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/report`).then((r) => json<SessionReport>(r)),
+  rtoStop: (id: string) => fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/rto/stop`, { method: 'POST' }).then((r) => json<OkResponse>(r)),
+  report: (id: string) => fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/report`).then((r) => json<SessionReport>(r)),
   decideAction: (id: string, aid: string, approved: boolean) =>
-    fetch(`/api/sessions/${encodeURIComponent(id)}/actions/${encodeURIComponent(aid)}`, {
+    fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/actions/${encodeURIComponent(aid)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved }),
     }).then((r) => json<{ ok: boolean; error?: string }>(r)),
-  planActions: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/actions/plan`, { method: 'POST' }).then((r) => json<{ ok: boolean; error?: string }>(r)),
+  planActions: (id: string) => fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/actions/plan`, { method: 'POST' }).then((r) => json<{ ok: boolean; error?: string }>(r)),
   connectFeed: (id: string, url: string, name?: string) =>
-    fetch(`/api/sessions/${encodeURIComponent(id)}/feed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name }) }).then((r) =>
+    fetch(`${API_ORIGIN}/api/sessions/${encodeURIComponent(id)}/feed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name }) }).then((r) =>
       json<{ ok: boolean; error?: string }>(r),
     ),
 }
@@ -74,8 +79,8 @@ class Socket {
   private outbox: string[] = []
 
   constructor(path: string) {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    this.url = `${proto}://${location.host}${path}`
+    const origin = API_ORIGIN ? new URL(API_ORIGIN) : location
+    this.url = `${origin.protocol === 'https:' ? 'wss' : 'ws'}://${origin.host}${path}`
     this.open()
   }
 
@@ -132,7 +137,7 @@ class Socket {
 
 /* ───────────────────────── Link (what the UI uses) ───────────────────────── */
 
-let socket: Socket | null = null
+let socket: Pick<Socket, 'ready' | 'buffered' | 'send' | 'close'> | null = null
 let mock: MockEngine | null = null
 
 export const link = {
@@ -203,10 +208,11 @@ export const link = {
   },
   async connectFeed(url: string, name?: string) {
     const st = useStore.getState()
-    if (!st.sessionId || st.mode !== 'live') throw new Error('Live feeds need the backend (not available in a replay)')
+    st.set({ pickedSource: true })
+    if (st.mode !== 'live' && !(await goLive())) throw new Error('The live backend is not reachable right now. Recorded runs still work.')
     st.resetAnalysis()
-    st.set({ videoSource: 'clip', nowPlaying: null, localClip: null, welcomeOpen: false })
-    const r = await api.connectFeed(st.sessionId, url, name)
+    st.set({ videoSource: 'clip', nowPlaying: null, localClip: null, welcomeOpen: false, assetName: name || 'Live feed' })
+    const r = await api.connectFeed(useStore.getState().sessionId!, url, name)
     if (!r.ok) throw new Error(r.error ?? 'Could not open the stream')
     useStore.getState().pushConsole({ kind: 'system', text: `Live feed connected: ${name || url}` })
   },
@@ -257,6 +263,30 @@ function startMock(reason: string) {
   }
 }
 
+/**
+ * Showcase site: switch from recorded runs to the live backend when a visitor wants to run their own
+ * footage or camera. The backend may be asleep, so give it a while to wake.
+ */
+export async function goLive(): Promise<boolean> {
+  const st = useStore.getState()
+  if (st.mode === 'live' && st.sessionId) return true
+  if (!SHOWCASE || !API_ORIGIN) return false
+  st.pushConsole({ kind: 'system', text: 'Connecting to the live backend (it can take up to a minute to wake)…' })
+  try {
+    const ctl = new AbortController()
+    const to = window.setTimeout(() => ctl.abort(), 75000)
+    const { session_id } = await api.createSession({ asset_name: 'Your footage', mode: 'live' }, ctl.signal)
+    window.clearTimeout(to)
+    socket?.close()
+    useStore.getState().set({ mode: 'live', sessionId: session_id, startedAt: Date.now(), assetName: st.assetName === 'Recorded runs' ? 'Your footage' : st.assetName })
+    socket = new Socket(`/ws/${encodeURIComponent(session_id)}`)
+    return true
+  } catch {
+    useStore.getState().pushConsole({ kind: 'error', text: 'The live backend is not reachable right now. Recorded runs still work.' })
+    return false
+  }
+}
+
 let booted = false
 export async function bootstrap() {
   if (booted) return
@@ -271,6 +301,14 @@ export async function bootstrap() {
   }
 
   const replay = q.get('replay')
+  if (SHOWCASE) {
+    // static deployment: no backend. Recorded runs replay in the browser; the welcome sheet offers them.
+    useStore.getState().set({ mode: 'replay', sessionId: replay ?? null, startedAt: Date.now(), videoSource: 'clip', assetName: replay ? asset : 'Recorded runs' })
+    void loadLibrary()
+    if (replay) socket = new StaticReplay(replay, Number(q.get('speed') ?? 1) || 1)
+    else useStore.getState().set({ welcomeOpen: true, conn: 'open' })
+    return
+  }
   if (replay) {
     useStore.getState().set({ mode: 'replay', sessionId: replay, startedAt: Date.now(), videoSource: 'clip' })
     socket = new Socket(`/ws/replay/${encodeURIComponent(replay)}${q.get('speed') ? `?speed=${encodeURIComponent(q.get('speed')!)}` : ''}`)

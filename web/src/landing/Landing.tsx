@@ -203,14 +203,14 @@ function Hero() {
           </div>
           <h1 className="mt-7 text-[44px] font-semibold leading-[0.98] tracking-[-0.045em] text-fg-1 sm:text-[60px] md:text-[74px]">
             <span className="hero-in block" style={hd(80)}>
-              Machines, measured
+              See the vibration.
             </span>
             <span className="hero-in block bg-[linear-gradient(92deg,var(--color-fg-1)_10%,var(--color-fg-3)_60%,var(--color-accent-2))] bg-clip-text text-transparent" style={hd(180)}>
-              by sight and sound.
+              Fix the machine.
             </span>
           </h1>
           <p className="hero-in mt-6 max-w-[580px] text-[16.5px] leading-relaxed text-fg-2 md:text-[18.5px]" style={hd(300)}>
-            Argonaut identifies a rotating machine&rsquo;s dynamics from ordinary video and sound, then finds the speed that runs it best, verified in closed loop.
+            Argonaut turns any camera into a vibration analyst. Meta&rsquo;s models find the fault in a pump, fan, motor or engine, agents fix it, and physics proves it.
           </p>
           <div className="hero-in mt-9 flex flex-col gap-3 sm:flex-row" style={hd(420)}>
             <CTA href="/console" primary>

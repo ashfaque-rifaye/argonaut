@@ -2,14 +2,14 @@
 
 The model never measures; it calls tools that return measured, uncertainty-tagged numbers,
 decides, and explains. Every diagnosis and proposal it emits must reference tool evidence.
-The same reasoning can run on Muse Spark Open (Baseten) in private mode.
+The same reasoning can run on Muse Spark Open (open weights) in private mode.
 """
 
 import json
 import uuid
 from typing import Any, Awaitable, Callable
 
-from .client import OPEN_WEIGHTS, WONDER, Emit, baseten, meta, stage
+from .client import OPEN_WEIGHTS, WONDER, Emit, meta, open_weights, stage
 
 SYSTEM = """You are Argonaut, a senior machinery-dynamics and process-optimisation engineer.
 You work ONLY from tool results: measured spectra, identified modes (frequency, damping with error
@@ -105,7 +105,7 @@ async def run(tools: dict[str, ToolFn], emit: Emit, user_msg: str = "Assess this
         claims, prov = check(text, ledger)
         await emit({"type": "agent", "role": "assistant", "text": text, "final": True,
                     "claims": claims, "provenance": prov})
-    client, model = (baseten(), OPEN_WEIGHTS) if private and baseten() else (meta(), WONDER)
+    client, model = (open_weights(), OPEN_WEIGHTS) if private and open_weights() else (meta(), WONDER)
     stage_name = "open_weights" if model == OPEN_WEIGHTS else "wonder"
     if model == OPEN_WEIGHTS:
         return await _run_chat(client, tools, emit, user_msg, max_turns, ledger)
@@ -146,7 +146,7 @@ async def run(tools: dict[str, ToolFn], emit: Emit, user_msg: str = "Assess this
 
 async def _run_chat(client, tools: dict[str, ToolFn], emit: Emit, user_msg: str, max_turns: int,
                     ledger=None) -> str:
-    """Same loop over Chat Completions for open-weight Muse Spark Open on Baseten."""
+    """Same loop over Chat Completions for open-weight Muse Spark Open."""
     chat_tools = [{"type": "function", "function": {k: t[k] for k in ("name", "description", "parameters")}}
                   for t in TOOLS]
     from .provenance import Ledger, check
@@ -168,6 +168,8 @@ async def _run_chat(client, tools: dict[str, ToolFn], emit: Emit, user_msg: str,
         if not m.tool_calls:
             break
         for tc in m.tool_calls:
+            await emit({"type": "pipeline", "stage": "open_weights", "state": "running", "model": OPEN_WEIGHTS,
+                        "detail": f"tool: {tc.function.name}"})
             try:
                 result = await tools[tc.function.name](json.loads(tc.function.arguments or "{}"))
             except Exception as e:

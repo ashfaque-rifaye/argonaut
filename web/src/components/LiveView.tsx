@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Anchor, Camera, ChevronDown, ExternalLink, Film, FlaskConical, Layers, Maximize2, Minimize2, RotateCcw, ScanLine, Upload } from 'lucide-react'
+import { Activity, Anchor, Camera, ChevronDown, ExternalLink, Film, FlaskConical, Layers, Maximize2, Minimize2, RotateCcw, ScanLine, Upload, Volume2, VolumeX } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { link } from '../lib/socket'
 import { startAudioStreaming, startFrameStreaming } from '../lib/capture'
@@ -9,6 +9,7 @@ import type { PipelineStage, SensorItem } from '../lib/protocol'
 import { Btn, cx, Panel } from './ui'
 import { useVideoDrop } from './SampleStrip'
 import { StageWait } from './StageWait'
+import { sensorParams, TrackedOverlay } from './TrackedOverlay'
 
 function shapeFor(f: number | null, items: SensorItem[]) {
   // amplitude/phase per sensor at the ODS frequency: modal shape if a mode matches, else spectral amplitude
@@ -38,6 +39,7 @@ function shapeFor(f: number | null, items: SensorItem[]) {
 
 export function LiveView({ compact }: { compact?: boolean }) {
   const sensors = useStore((s) => s.sensors)
+  const tracks = useStore((s) => s.tracks)
   const tel = useStore((s) => s.telemetry)
   const modal = useStore((s) => s.modal)
   const coach = useStore((s) => s.coach)
@@ -63,6 +65,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
   const polyRefs = useRef<Record<string, SVGPolygonElement | null>>({})
   const [prompts, setPrompts] = useState('')
   const [coachVisible, setCoachVisible] = useState(false)
+  // the footage's own sound; browsers only allow it after a click, so it starts off
+  const [sound, setSound] = useState(false)
 
   const W = sensors?.width ?? 960
   const H = sensors?.height ?? 540
@@ -104,7 +108,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
   const clipSrc = src === 'clip' ? localClip?.url ?? mediaUrl ?? null : null
   const streamMode = np?.mode === 'stream' && !localClip
   // analyse (and replays / uploads) follow the analysis position (telemetry.clip_t); stream just plays
-  const synced = src === 'clip' && !streamMode
+  const freeplay = new URLSearchParams(location.search).get('freeplay') === '1'
+  const synced = src === 'clip' && !streamMode && !freeplay
   // a library clip in analyse mode holds its first frame until the pipeline starts walking the clip
   const holdForSync = synced && !localClip && !!np
   const clipT = tel?.clip_t
@@ -128,6 +133,10 @@ export function LiveView({ compact }: { compact?: boolean }) {
     }, 400)
     return () => window.clearInterval(id)
   }, [holdForSync])
+
+  useEffect(() => {
+    if (videoRef.current && src === 'clip') videoRef.current.muted = !sound
+  }, [sound, src, clipSrc])
 
   // coach toast visibility
   useEffect(() => {
@@ -194,11 +203,11 @@ export function LiveView({ compact }: { compact?: boolean }) {
       [W - 160 * k, 0, W, 26 * k],
       [0, H - 28 * k, 270 * k, H],
     ]
-    const ch = 17 * k
+    const ch = 30 * k
     const g = 5 * k
     const order = [...items].sort((a, b) => (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]) - (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]))
     const out = order.map((it) => {
-      const tw = (it.label.length * 6.1 + `${Math.round(it.confidence * 100)}`.length * 6.4 + 26) * k
+      const tw = (Math.max(it.label.length * 6.1 + `${Math.round(it.confidence * 100)}`.length * 6.4, 112) + 26) * k
       const [x1, y1, x2, y2] = it.bbox
       const cy = (y1 + y2) / 2 - ch / 2
       const cands: [number, number][] = [
@@ -241,16 +250,16 @@ export function LiveView({ compact }: { compact?: boolean }) {
           : localClip
             ? `SOURCE · ${localClip.name} · from disk`
             : mediaUrl
-              ? 'SOURCE · recorded clip'
+              ? mediaKind === 'mjpeg' ? 'SOURCE · live feed' : 'SOURCE · recorded clip'
               : mode === 'live' && libraryState !== 'error'
                 ? 'SOURCE · loading library…'
                 : 'no source'
-  const ended = !!clip && np?.status === 'ended'
+  const ended = !!clip && np?.status === 'ended' && !freeplay
   // which model the footage is waiting on before the first analysed frame
   const waitStage: PipelineStage = (['sam', 'spark', 'dsp', 'wonder'] as PipelineStage[]).find((k) => pipeline[k].state === 'running') ?? 'sam'
   const waitingAnalyse = !!clip && np?.mode === 'analyse' && (np.status === 'starting' || np.status === 'playing') && clipT == null
   const waitingStream = !!clip && streamMode && np?.status !== 'ended' && np?.status !== 'error' && !tel
-  const hudMode = src === 'webcam' ? 'CAM' : src === 'sim' ? 'SIM' : mode === 'replay' ? 'REPLAY' : streamMode ? 'STREAM' : np && !localClip ? 'ANALYSE' : 'CLIP'
+  const hudMode = src === 'webcam' ? 'CAM' : src === 'sim' ? 'SIM' : mediaKind === 'mjpeg' ? 'LIVE' : mode === 'replay' ? 'REPLAY' : streamMode ? 'STREAM' : np && !localClip ? 'ANALYSE' : 'CLIP'
   const openSource = () => set({ sourceOpen: true })
 
   const sendPrompts = () => {
@@ -281,6 +290,21 @@ export function LiveView({ compact }: { compact?: boolean }) {
             {src === 'webcam' ? <Camera size={11} /> : <Layers size={11} />}
             <ChevronDown size={11} className="text-fg-4" />
           </button>
+          {src === 'clip' && clipSrc && mediaKind !== 'mjpeg' && (clip?.has_audio ?? true) && (
+            <button
+              type="button"
+              onClick={() => setSound(!sound)}
+              data-tip={sound ? 'Mute the machine' : 'Hear the machine'}
+              aria-label={sound ? 'Mute the footage' : 'Play the footage sound'}
+              aria-pressed={sound}
+              className={cx(
+                'ml-1 inline-flex h-6 w-7 items-center justify-center rounded-md border transition-colors',
+                sound ? 'border-accent/45 bg-[var(--accent-dim)] text-accent-2' : 'border-line-2 bg-bg-2 text-fg-2 hover:bg-bg-3 hover:text-fg-1',
+              )}
+            >
+              {sound ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => set({ focusView: !focusView })}
@@ -324,7 +348,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
             poster={clip?.poster_url ?? undefined}
             className="absolute inset-0 h-full w-full object-contain"
             autoPlay={!holdForSync}
-            loop={!!localClip}
+            loop={!!localClip || freeplay}
             muted
             playsInline
             preload="auto"
@@ -351,7 +375,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
         {/* vignette for legibility over any footage */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_45%,transparent_55%,color-mix(in_srgb,var(--color-shadow)_55%,transparent))]" />
 
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
+        {tracks && <TrackedOverlay tracks={tracks} video={videoRef} k={k} tel={tel} selected={selected} onSelect={(id) => set({ selectedChannel: id })} />}
+        {!tracks && <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
           {items.map((it, i) => {
             const sel = selected === it.id
             return (
@@ -385,7 +410,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
             return (
               <g key={`l-${it.id}-${maskSig}`} transform={`translate(${x} ${y})`} pointerEvents="none">
                 <g className="chip-in" style={{ '--d': `${300 + i * 110}ms` } as React.CSSProperties}>
-                <rect width={tw} height={17 * k} rx={3 * k} fill="var(--color-bg-1)" fillOpacity={0.86} stroke="var(--color-line-2)" strokeWidth={k} />
+                <rect width={tw} height={30 * k} rx={4 * k} fill="var(--color-bg-1)" fillOpacity={0.88} stroke="var(--color-line-2)" strokeWidth={k} />
                 <rect x={6 * k} y={5.5 * k} width={6 * k} height={6 * k} rx={1.5 * k} fill={it.color} />
                 <text x={17 * k} y={12 * k} fontSize={fs} fill="var(--color-fg-1)" fontFamily="Inter Variable, sans-serif" fontWeight={500}>
                   {label}
@@ -393,11 +418,14 @@ export function LiveView({ compact }: { compact?: boolean }) {
                     {conf}
                   </tspan>
                 </text>
+                <text x={6 * k} y={25 * k} fontSize={fs * 0.92} fill="var(--color-accent-2)" fontFamily="JetBrains Mono Variable, monospace">
+                  {it.is_reference ? 'static reference' : (sensorParams(tel, it.id) ?? 'measuring…')}
+                </text>
                 </g>
               </g>
             )
           })}
-        </svg>
+        </svg>}
 
         {/* HUD */}
         <div className="num pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded-[4px] bg-black/60 px-1.5 py-[3px] text-[10px] text-fg-2 backdrop-blur-sm">
@@ -407,7 +435,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
         </div>
         {items.length > 0 && (
           <div className="num pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded-[4px] bg-black/60 px-1.5 py-[3px] text-[10px] text-fg-2 backdrop-blur-sm">
-            <ScanLine size={11} className="text-accent" /> SAM 3.1 · {items.length} regions
+            <ScanLine size={11} className="text-accent" /> SAM 3.1 · {tracks ? `tracking ${tracks.items.length} parts · camera motion removed` : `${items.length} regions`}
           </div>
         )}
         {ref && (

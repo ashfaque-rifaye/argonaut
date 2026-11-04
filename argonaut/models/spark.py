@@ -22,9 +22,12 @@ SCENE_SCHEMA = {
         "reference_prompt": {"type": "string", "description": "a static background surface, e.g. 'wall', 'floor'"},
         "sensor_boxes": {"type": "array", "description": "tight pixel box for each sensor_prompt, same order",
                          "items": {"type": "object", "properties": {
-                             "name": {"type": "string"}, "x1": {"type": "number"}, "y1": {"type": "number"},
+                             "name": {"type": "string"},
+                             "what": {"type": "string", "description": "2-5 words on what this part does or is, read from "
+                                                                       "the image, e.g. 'drives the pump', 'cast iron volute'"},
+                             "x1": {"type": "number"}, "y1": {"type": "number"},
                              "x2": {"type": "number"}, "y2": {"type": "number"}},
-                             "required": ["name", "x1", "y1", "x2", "y2"]}},
+                             "required": ["name", "what", "x1", "y1", "x2", "y2"]}},
         "scale_reference": {"type": "object", "properties": {
             "object": {"type": "string"}, "real_size_mm": {"type": "number"},
             "pixel_size": {"type": "number"}}, "required": ["object", "real_size_mm", "pixel_size"]},
@@ -116,11 +119,20 @@ async def _json(model: str, content: list[dict], schema: dict, name: str, max_to
     raise ValueError(f"{name}: model returned no valid JSON ({last})")
 
 
-async def understand_scene(frame: np.ndarray, emit: Emit | None = None, effort: str = "low") -> dict:
-    """effort='minimal' for live mode (~4 s), 'low' for clip analysis."""
+async def understand_scene(frame: np.ndarray, emit: Emit | None = None, effort: str = "low",
+                           known: list[str] | None = None) -> dict:
+    """effort='minimal' for live mode (~4 s), 'low' for clip analysis.
+
+    `known`: names of parts already seen in this video, so the same part keeps its name when the camera moves.
+    """
     h, w = frame.shape[:2]
     prompt = SCENE_PROMPT + (f"\n- The image is {w}x{h} px (x right, y down). For every proposed part also give a "
                              "tight pixel box in sensor_boxes.")
+    if known:
+        prompt += ("\n- This frame is from a moving camera, so make each box tight around the whole visible part, including its "
+                   "shadowed side. Parts named earlier in this video: " + ", ".join(known)
+                   + ". If one of them is visible use exactly that name; only add a new name for a part not listed. "
+                     "Box only what is actually visible in this frame.")
     async with stage(emit, "spark", SPARK, f"scene, parts + boxes, nameplate, scale ({effort})"):
         out = await _json(SPARK, [{"type": "input_text", "text": prompt}, _img_part(frame)],
                           SCENE_SCHEMA, "scene", effort=effort)
@@ -133,6 +145,28 @@ async def understand_scene(frame: np.ndarray, emit: Emit | None = None, effort: 
             boxes[b["name"]] = [x1, y1, x2, y2]
     out["boxes"] = boxes
     return out
+
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {"outlines": {"type": "array", "items": {"type": "object", "properties": {
+        "number": {"type": "integer"}, "correct": {"type": "boolean"}, "actually_on": {"type": "string"}},
+        "required": ["number", "correct", "actually_on"]}}},
+    "required": ["outlines"],
+}
+
+
+async def verify_outlines(frame: np.ndarray, labels: list[str], emit: Emit | None = None) -> list[bool]:
+    """Spark checks SAM's work: `frame` has numbered outlines drawn on it; is each one on the part it is named for?"""
+    listing = "\n".join(f"{i + 1}: {name}" for i, name in enumerate(labels))
+    prompt = ("Numbered outlines are drawn on this frame of a machine, each meant to surround the named part:\n" + listing
+              + "\nFor each number say whether the outline is mostly on that part. It is NOT correct if it mostly covers "
+                "background, floor, sky, bright glare, or a different part of the machine. Clipped by the frame edge or partly "
+                "hidden is fine. Be strict about wrong objects.")
+    async with stage(emit, "spark", SPARK, "check the tracked outlines"):
+        out = await _json(SPARK, [{"type": "input_text", "text": prompt}, _img_part(frame)], VERIFY_SCHEMA, "verify", effort="low")
+    bad = {o["number"] for o in out.get("outlines") or [] if not o["correct"]}
+    return [i + 1 not in bad for i in range(len(labels))]
 
 
 LOCATE_SCHEMA = {

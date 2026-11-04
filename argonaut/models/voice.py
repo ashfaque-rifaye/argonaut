@@ -62,11 +62,13 @@ class VoiceSession:
                     if kind == "speaker":
                         speaker = ev.get("label", speaker)
                     elif kind == "transcript":
-                        await self.emit({"type": "transcript", "speaker": speaker, "text": ev.get("transcript", ""),
-                                         "final": bool(ev.get("final"))})
+                        if ev.get("transcript", "").strip():
+                            await self.emit({"type": "transcript", "speaker": speaker, "text": ev["transcript"],
+                                             "final": bool(ev.get("final"))})
                     elif kind == "speechComplete":
                         text = ev.get("transcript", "")
-                        await self.emit({"type": "transcript", "speaker": speaker, "text": text, "final": True})
+                        if text.strip():
+                            await self.emit({"type": "transcript", "speaker": speaker, "text": text, "final": True})
                         for rx, name in COMMANDS:
                             if rx.search(text):
                                 await self.on_command(name)

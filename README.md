@@ -1,6 +1,6 @@
 # Argonaut
 
-**Camera-native system identification and real-time optimisation for rotating plant, built on Meta's models.**
+**See the vibration. Fix the machine.** Argonaut turns any camera into a vibration analyst: Meta's models find the fault, agents fix it, and physics proves it.
 
 Argonaut turns a video of a pump, fan, motor, diesel genset or washing machine into a live digital twin of the machine. From that twin it works out the speed setpoint that runs the machine best, and before anything is applied it checks the move with physics and a person signs off.
 
@@ -16,12 +16,14 @@ Argonaut turns a video of a pump, fan, motor, diesel genset or washing machine i
   - **Work orders** for the CMMS (ISO 14224 failure mode, risk-matrix priority, tasks with tolerances, safety, parts, verification), downloadable as Markdown; **impact** (kWh, $, CO₂ per year); **follow-up** date.
   - Without a connected drive (real footage) the physical steps go into the work order for a technician instead.
 - A person **approves**. The setpoint is written to the drive (a simulated VFD over Modbus TCP), and Argonaut **re-measures to verify** the predicted change.
-- **Muse Voice Transcribe** provides realtime, code-switched voice control (English, Hindi, Tamil, …). **Muse Spark Open** (open weights, via Baseten) provides a private mode.
+- **Muse Voice Transcribe** provides realtime, code-switched voice control (English, Hindi, Tamil, …). **Muse Spark Open** (open weights, on any OpenAI-compatible endpoint) provides a private mode.
+
+**Live showcase:** https://argonaut-sand.vercel.app (recorded runs replay instantly in the browser; uploads and live feeds run on the hosted backend, with usage limits).
 
 ## Run
 ```bash
 uv sync
-cp .env.example .env                                   # add MODEL_API_KEY (and optionally BASETEN_API_KEY)
+cp .env.example .env                                   # add MODEL_API_KEY (HF_TOKEN or BASETEN_API_KEY for private mode)
 uv run python scripts/smoke_test.py                    # checks every Meta model we use
 uv run uvicorn argonaut.server:app --port 8000         # realtime backend
 cd web && pnpm install && pnpm dev                     # control room UI at http://localhost:5173
@@ -35,7 +37,8 @@ cd web && pnpm install && pnpm dev                     # control room UI at http
 - **Your own video:** drop an mp4/mov on the live view or use the *Upload video* tile under it. The console runs it through the same engine.
 - **A live camera:** *New source → Connect a live feed* takes an RTSP / HTTP / HLS URL (or a camera index); the server decodes it into the live engine and relays an MJPEG preview to the browser.
 - **Agentic demo with the drive:** start the plant (`uv run python -m argonaut.sim.plant --kind pump --modbus-port 5020 --noise 0.02 --speed 1480 --ramp 300`), then `uv run python scripts/record_agent_demo.py`, or open the recorded run `?replay=demo_agent_actions&speed=4`.
-- **Intro / outro films:** `npm i --prefix film playwright-core@1.48.2` then `node film/render.mjs intro` (or `outro`): frame-accurate HTML motion graphics rendered through Microsoft Edge to `film/out/*.mp4`.
+- **Deploy:** the static showcase on Vercel and the live backend on Cloud Run. See [docs/DEPLOY.md](docs/DEPLOY.md).
+- **Intro / outro films:** `npm i --prefix film playwright-core@1.48.2` then `uv run python film/music.py intro film/out/intro.wav` (original synthesised soundtrack) and `node film/render.mjs intro` (or `outro`): frame-accurate HTML motion graphics rendered through Microsoft Edge to `film/out/*.mp4`, music muxed in.
 
 ## Layout
 | Path | What |

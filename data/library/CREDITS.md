@@ -19,3 +19,6 @@ Excerpts re-encoded to ≤1280 px for the Argonaut demo. Each clip keeps its ori
 | Washing machine · 1400 rpm final spin | Front-loading washing machine (black) running an unbalanced 1400 rpm final spin; handheld  | WasherHome2009 | CC BY 3.0 | https://www.youtube.com/watch?v=ZGO6yKJ4B6Q |
 | Washing machine · unbalanced spin (drum) | Front-loading washer drum viewed through the door during an unbalanced spin cycle; static  | WASHER SAMSUNG AND LG 201 | CC BY 3.0 | https://www.youtube.com/watch?v=hTXNhqbNyxo |
 | Self-priming centrifugal pump · bench | Small self-priming centrifugal pump on a table discharging water into a bucket; mostly sta | Numatic Plants (Mavia Charolia) | CC BY 3.0 | https://www.youtube.com/watch?v=a6WYx_IcByw |
+| Motor-pump skid · walk-around | Exposed motor and centrifugal pump on a skid with a vibration analyser; hand-held camera m | hu Spectronics | CC BY 3.0 | https://www.youtube.com/watch?v=zowAac1ttu0 |
+| Transmission belt drive | Industrial transmission belt running, static shot with the machine's own sound | Sounds of Changes | CC BY 3.0 | https://www.youtube.com/watch?v=H9MuUozteRE |
+| Mine conveyor drive motors | Drive motors for a conveyor underground in the Velenje Coal Mine | Sounds of Changes | CC BY 3.0 | https://www.youtube.com/watch?v=3DqRT90ORIY |

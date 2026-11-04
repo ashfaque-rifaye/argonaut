@@ -58,6 +58,11 @@ class _Track:
         return float(m[0]), float(m[1])
 
 
+LOOK_S = 8.0        # at most one look by the models this often
+MOVED_FRAC = 0.15   # look again when the view has moved this fraction of the width
+DARK_FRAME = 15.0   # mean grey level below which there is nothing to look at
+
+
 class LiveEngine:
     def __init__(self, session, window_s: float = 6.0, max_width: int = 640):
         self.s, self.window_s, self.max_width = session, window_s, max_width
@@ -74,6 +79,10 @@ class LiveEngine:
         self.lat: deque[float] = deque(maxlen=60)
         self.dropped = 0
         self._placing = False
+        self._provisional = True  # still on the placeholder regions, no model has seen a usable frame
+        self._next_look = 0.0
+        self._look_gray: np.ndarray | None = None
+        self._move_check = 0.0
         self._task: asyncio.Task | None = None
         self._tick = 0
         self.mm_per_px = 0.5
@@ -81,6 +90,7 @@ class LiveEngine:
     # ---------------------------------------------------------------- inputs
     def set_prompts(self, prompts: list[str]):
         self.prompts, self.regions, self.ref, self.tracks = prompts, None, None, {}
+        self._provisional, self._next_look = True, 0.0
 
     async def push_audio(self, pcm16: bytes):
         x = np.frombuffer(pcm16, np.int16).astype(np.float32) / 32768.0
@@ -112,9 +122,11 @@ class LiveEngine:
             self.regions = _fallback_regions(*gray.shape[::-1])
             self._anchor(gray)
             await self.s.emit(sensors_event(self.regions, gray.shape[1], gray.shape[0]))
-            if not self._placing:
-                self._placing = True
-                asyncio.create_task(self._place(img, gray))
+        now = time.perf_counter()
+        if (not self._placing and now >= self._next_look and float(gray.mean()) >= DARK_FRAME
+                and (self._provisional or self._view_moved(gray, now))):
+            self._placing, self._next_look, self._look_gray = True, now + LOOK_S, gray
+            asyncio.create_task(self._place(img, gray))
         if self.ref is None or gray.shape != self.ref.shape:
             self._anchor(gray)
         for rid, tr in self.tracks.items():
@@ -128,6 +140,17 @@ class LiveEngine:
                 q.popleft()
         if self._task is None:
             self._task = asyncio.create_task(self._loop())
+
+    def _view_moved(self, gray: np.ndarray, now: float) -> bool:
+        """Has the camera moved far from where the models last looked? Checked once a second, on small frames."""
+        if now < self._move_check or self._look_gray is None or self._look_gray.shape != gray.shape:
+            return False
+        self._move_check = now + 1.0
+        small = (160, max(1, 160 * gray.shape[0] // gray.shape[1]))
+        a = cv2.resize(self._look_gray, small, interpolation=cv2.INTER_AREA).astype(np.float32)
+        b = cv2.resize(gray, small, interpolation=cv2.INTER_AREA).astype(np.float32)
+        (dx, dy), _ = cv2.phaseCorrelate(a, b)
+        return float(np.hypot(dx, dy)) > MOVED_FRAC * small[0]
 
     def _anchor(self, gray: np.ndarray):
         self.ref = gray
@@ -152,6 +175,8 @@ class LiveEngine:
                         self.mm_per_px = sr["real_size_mm"] / sr["pixel_size"]
                         self.scale_calibrated = 0.02 <= self.mm_per_px <= 5.0
                     await self.s.emit({"type": "coach", "level": scene["capture"]["level"], "text": scene["capture"]["advice"]})
+                    if scene["capture"]["level"] == "block":
+                        return  # nothing usable in this frame: keep the placeholders and look again
                 regs = await sam.place_sensors(img, prompts, ref, self.s.emit, effort="minimal",
                                                boxes=scene.get("boxes"))
             if not regs:
@@ -160,6 +185,7 @@ class LiveEngine:
                 from .pipeline import _fallback_regions
                 regs.append(_fallback_regions(w, h)[-1])
             self.regions = regs
+            self._provisional = False
             self.ref = None  # re-anchor on the next frame with the SAM masks
             from .models.sam import sensors_event
             await self.s.emit(sensors_event(regs, w, h))

@@ -6,6 +6,7 @@ import { chooseFile, chooseWebcam, featuredClip, openRecorded, recordedRunId, st
 import type { LibraryClip } from '../lib/protocol'
 import { isVideoFile, useVideoDrop } from './SampleStrip'
 import { cx } from './ui'
+import { REPO_URL, SHOWCASE } from '../lib/showcase'
 
 const TOUR_KEY = 'argonaut.tour.v6'
 
@@ -28,11 +29,11 @@ export function WelcomeSheet() {
     return () => window.removeEventListener('keydown', k)
   }, [open, set])
   if (!open) return null
-  const real = (clips ?? []).filter((c) => c.real)
+  const real = (clips ?? []).filter((c) => (SHOWCASE ? !!recordedRunId(c, runs) : c.real))
   const hero = clips ? featuredClip(clips) : null
   const more = real.filter((c) => c.id !== hero?.id).slice(0, 5)
 
-  const play = (c: LibraryClip) => void startPlay(c, 'analyse')
+  const play = (c: LibraryClip) => (SHOWCASE ? replay(c) : void startPlay(c, 'analyse'))
   const replay = (c: LibraryClip) => {
     const r = recordedRunId(c, runs)
     if (r) openRecorded(r)
@@ -57,9 +58,9 @@ export function WelcomeSheet() {
       <div className="glass-float anim-in max-h-[94vh] w-full max-w-[1080px] overflow-y-auto rounded-[22px] p-6 sm:p-8">
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
-            <div className="eyebrow text-accent-2">Argonaut · machines, measured by sight and sound</div>
+            <div className="eyebrow text-accent-2">Argonaut · see the vibration, fix the machine</div>
             <h1 id="welcome-title" className="mt-2 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg-1 sm:text-[30px]">
-              Point a camera at a machine. Get it diagnosed, and fixed.
+              Any camera becomes a vibration analyst. Agents fix what it finds.
             </h1>
             <p className="mt-2 max-w-[720px] text-[13.5px] leading-relaxed text-fg-2">
               Argonaut turns ordinary footage of a pump, fan, motor or engine into a vibration test: Meta's models find where to measure and what the machine is, physics measures it, and agents act on it, with you approving every change.
@@ -109,9 +110,9 @@ export function WelcomeSheet() {
               </button>
               <div className="flex flex-wrap items-center gap-2 p-3">
                 <button onClick={() => play(hero)} className="inline-flex h-8 items-center gap-1.5 rounded-[9px] bg-accent px-3 text-[12px] font-semibold text-[var(--color-on-accent)] hover:brightness-110">
-                  <Play size={12} /> Analyse it live
+                  <Play size={12} /> {SHOWCASE ? 'Play the recorded run' : 'Analyse it live'}
                 </button>
-                {recordedRunId(hero, runs) && (
+                {!SHOWCASE && recordedRunId(hero, runs) && (
                   <button onClick={() => replay(hero)} className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-line-2 px-3 text-[12px] font-medium text-fg-1 hover:bg-bg-3" data-tip="An earlier run of this clip with the Meta models, replayed instantly (no API wait)">
                     Instant recorded run
                   </button>
@@ -188,7 +189,18 @@ export function WelcomeSheet() {
           <button onClick={startTour} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-accent-2 hover:underline">
             Take the 60-second tour <ArrowRight size={12} />
           </button>
-          <span className="text-[10.5px] text-fg-4">Esc to explore the console · press ? any time for shortcuts and the tour</span>
+          <span className="text-[10.5px] text-fg-4">
+            {SHOWCASE ? (
+              <>
+                Samples replay runs recorded with the Meta models. Your upload or feed runs live on our backend, with limits ·{' '}
+                <a href={REPO_URL} className="underline hover:text-fg-2">
+                  run it yourself
+                </a>
+              </>
+            ) : (
+              'Esc to explore the console · press ? any time for shortcuts and the tour'
+            )}
+          </span>
         </div>
       </div>
     </div>
@@ -307,7 +319,7 @@ export function useFirstVisitTour() {
       } catch {
         seen = true
       }
-      if (!seen) window.setTimeout(() => useStore.getState().tourStep == null && set({ tourStep: 0 }), 1200)
+      if (!seen) window.setTimeout(() => useStore.getState().tourStep == null && !useStore.getState().pickedSource && set({ tourStep: 0 }), 1200)
     }
     prev.current = welcome
   }, [welcome, set])

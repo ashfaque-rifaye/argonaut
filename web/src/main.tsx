@@ -14,7 +14,7 @@ function Root() {
   const path = usePath()
   const isConsole = path.replace(/\/+$/, '') === '/console'
   useEffect(() => {
-    document.title = isConsole ? 'Argonaut · Control Room' : 'Argonaut · Machines, measured by sight and sound'
+    document.title = isConsole ? 'Argonaut · Control Room' : 'Argonaut · See the vibration. Fix the machine.'
   }, [isConsole])
   return isConsole ? (
     <Suspense fallback={<div className="h-screen bg-bg-0" />}>

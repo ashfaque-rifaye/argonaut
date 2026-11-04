@@ -69,6 +69,8 @@ export interface CommandMsg {
 export interface ChatMsg {
   type: 'chat'
   text: string
+  /** reason on the open-weight Muse Spark Open instead of Muse Wonder */
+  private?: boolean
 }
 export type ClientMessage = FrameMsg | AudioMsg | SensorsSetMsg | CommandMsg | ChatMsg
 
@@ -103,11 +105,34 @@ export interface SensorsEvent {
   items: SensorItem[]
 }
 
+/** Parts tracked through a moving camera: one outline per tracked video frame, null while out of the picture. */
+export interface TrackItem {
+  id: string
+  label: string
+  /** what Muse Spark says this part is or does */
+  what: string
+  color: string
+  confidence: number
+  polys: (Point[] | null)[]
+}
+export interface TracksEvent {
+  type: 'tracks'
+  fps: number
+  width: number
+  height: number
+  n: number
+  /** seconds at which Muse Spark looked again (camera moved or the shot changed) */
+  shots: number[]
+  items: TrackItem[]
+}
+
 export type IsoZone = 'A' | 'B' | 'C' | 'D'
 export interface TelemetryChannel {
   id: string
   disp_mm_rms: number
   vel_mm_s_rms: number
+  /** strongest line in this sensor's current window, up to the camera's Nyquist */
+  peak_hz?: number | null
   /** null when the scale is uncalibrated (see TelemetryEvent.calibrated) */
   iso_zone: IsoZone | null
 }
@@ -486,6 +511,7 @@ export interface ErrorEvent {
 export type ServerMessage =
   | PipelineEvent
   | SensorsEvent
+  | TracksEvent
   | TelemetryEvent
   | SpectrumEvent
   | WaterfallEvent
@@ -589,6 +615,8 @@ export interface LibraryClip {
   fps?: number | null
   duration_s?: number | null
   has_audio?: boolean
+  /** recorded run that replays this clip (static showcase); default demo_real_<id> */
+  run?: string
 }
 export interface LibraryResponse {
   clips: LibraryClip[]
@@ -614,7 +642,7 @@ export const STAGE_META: Record<PipelineStage, { name: string; role: string; def
   wonder: { name: 'Muse Wonder', role: 'Agent · experiment plan + optimizer', defaultModel: 'muse-wonder-1.0' },
   voice: { name: 'Muse Voice Transcribe', role: 'Hands-free voice control', defaultModel: 'muse-voice-transcribe' },
   dsp: { name: 'DSP', role: 'Sub-pixel motion · FFT · order tracking', defaultModel: 'argonaut-dsp' },
-  open_weights: { name: 'Muse Spark Open', role: 'Private mode · open weights on Baseten', defaultModel: 'muse-spark-open' },
+  open_weights: { name: 'Muse Spark Open', role: 'Private mode · open weights', defaultModel: 'muse-spark-open' },
 }
 
 export function isServerMessage(x: unknown): x is ServerMessage {

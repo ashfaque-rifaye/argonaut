@@ -1,9 +1,10 @@
 // Frame-accurate render of a film page (intro.html / outro.html) to MP4.
 //   npm i --prefix film playwright-core@1.48.2      (once; uses the installed Microsoft Edge)
+//   uv run python film/music.py intro film/out/intro.wav   (soundtrack, optional)
 //   node film/render.mjs intro      ->  film/out/argonaut-intro.mp4
 // Each frame calls window.render(t) and screenshots the stage, so motion is exact at any frame rate.
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -32,7 +33,10 @@ for (let i = 0; i < n; i++) {
 }
 await browser.close()
 const out = join(here, 'out', `argonaut-${name}.mp4`)
-const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps), '-i', join(frames, 'f%05d.jpg'),
+// soundtrack: film/out/<name>.wav from film/music.py, muxed when present
+const wav = join(here, 'out', `${name}.wav`)
+const audio = existsSync(wav) ? ['-i', wav, '-c:a', 'aac', '-b:a', '192k', '-shortest'] : []
+const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps), '-i', join(frames, 'f%05d.jpg'), ...audio,
   '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], { stdio: 'inherit' })
 if (r.status !== 0) process.exit(r.status ?? 1)
 rmSync(frames, { recursive: true, force: true })
