@@ -15,6 +15,7 @@ import numpy as np
 from .dsp import audio as A
 from .dsp import dealias as DA
 from .dsp import identify, modal, severity, spectral
+from .dsp import kinematics as KIN
 from .dsp.motion import Region, measure_regions, read_video
 from .models import client as mc
 from .optimize import Twin, optimise
@@ -22,6 +23,23 @@ from .optimize import Twin, optimise
 RUNS = Path(__file__).resolve().parent.parent / "data" / "runs"
 WATERFALL_FMAX = 120.0
 PLAUSIBLE_MAX_MM_S = 45.0  # above ISO 20816 zone-D levels of any normal machine: treat as scale error
+ORDER_RATIOS = (1 / 6, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 2, 2, 3, 4, 6)
+
+
+def _stationary_span(tt, sp, at_end: bool, tol: float = 0.03, max_s: float = 8.0) -> float:
+    """Longest window (<= max_s) at the steady end of the speed track whose speed varies < tol:
+    a spectrum over a speed sweep smears every line and would mislead the kinematic sieve."""
+    if len(sp) < 3:
+        return 0.0
+    order = range(len(sp) - 1, -1, -1) if at_end else range(len(sp))
+    ref, span = None, 0.0
+    idx = list(order)
+    ref = float(sp[idx[0]])
+    for j in idx[1:]:
+        if abs(sp[j] - ref) > tol * max(ref, 1e-6):
+            break
+        span = abs(float(tt[j]) - float(tt[idx[0]]))
+    return min(span, max_s)
 
 
 def _f(x):
@@ -43,6 +61,10 @@ class Session:
         self.nameplate: dict = {}
         self.pump_curve: dict | None = None
         self.sensor_prompts: list[str] | None = None
+        self.scene: dict | None = None
+        self.kin = KIN.Kinematics()
+        self.kin_override: dict = {}   # what-if assumptions set by the agent or the operator
+        self.speed_post: dict | None = None
         self.plant = None  # optional VFD client (simulator)
 
     # ---------------------------------------------------------------- events
@@ -86,6 +108,7 @@ class Session:
                 scene = await spark.understand_scene(first_bgr, self.emit, effort="minimal")
                 await self.emit({"type": "coach", **scene["capture"], "text": scene["capture"]["advice"]})
                 self.nameplate = scene.get("nameplate") or {}
+                self.scene = scene
             except Exception as e:
                 await self.emit({"type": "error", "message": f"scene understanding failed: {e}"})
             if regions is None:
@@ -133,8 +156,15 @@ class Session:
                          "detail": f"sub-pixel tracking of {len(chans)} rigid sensors"
                                    + (f", rejected {len(rejected)}" if rejected else "")})
 
+        # --- kinematic model (Muse Spark's reading of the machine, plus any what-if override)
+        self.kin = KIN.Kinematics.from_scene(self.scene, self.nameplate)
+        for k, v in self.kin_override.items():
+            setattr(self.kin, k, v)
+        self._audio = None
+
         # --- audio
         audio = await asyncio.to_thread(A.load_audio, path)
+        self._audio = audio
         fa = aa = None
         cav = None
         if audio is not None and len(audio) > 24000:
@@ -191,6 +221,39 @@ class Session:
                                                  float(np.median(sp)), bin_hz=fm[1] - fm[0])
                     if d > 1:
                         sp = sp / d
+        # Bayesian kinematic speed posterior on the steady part of the recording: settles which order
+        # the microphone hears when the machine's kinematics make one answer far more probable.
+        self.speed_post = None
+        # A clip whose tracked speed never sweeps far is steady: use its last 8 s (the tachometer track
+        # itself may be what is wrong). A run-up / coast-down uses only its steady end.
+        sweep_all = float(np.ptp(sp) / max(np.max(sp), 1e-6)) if len(sp) else 1.0
+        # steadiness is judged on the raw acoustic tone when there is one: the tachometer's order
+        # choice may be the very thing that is wrong
+        steady_ref = tone if (audio is not None and "tone" in locals() and len(tone) == len(tt)) else sp
+        # the steadier end of the recording: the end of a run-up, the start of a coast-down
+        span_end, span_start = _stationary_span(tt, steady_ref, True), _stationary_span(tt, steady_ref, False)
+        at_end = span_end >= span_start
+        seg_s = (min(8.0, len(audio) / 24000 - 0.5) if audio is not None and sweep_all < 0.3
+                 else max(span_end, span_start))
+        self._kin_window_s = seg_s
+        if audio is not None and len(audio) > 24000 * 3 and seg_s >= 2.0:
+            n = int(seg_s * 24000)
+            seg = audio[-n:] if at_end else audio[:n]
+            fk, ak = A.spectrum(seg, 24000, fmax=1500.0, seconds=min(4.0, seg_s / 2))
+            self._kin_spec = (fk, ak)
+            self.line = KIN.detect_line_hz(fk, ak)
+            post = await asyncio.to_thread(KIN.speed_posterior, fk, ak, self.kin, line=self.line)
+            self.speed_post = post
+            if post and not hint and post["p_map"] >= 0.8 and speed_source.startswith("audio"):
+                ref = float(np.median(sp[-8:] if sp[-1] >= sp[0] else sp[:8]))
+                r = post["map_hz"] / max(ref, 1e-6)
+                q = min(ORDER_RATIOS, key=lambda q: abs(r / q - 1))
+                # Same order (r ~ 1), another order (r ~ rational) or, when near-certain, an unrelated line
+                # the tachometer locked onto: rescale the track to the posterior MAP, whose line fit is finer.
+                if abs(r - 1) < 0.03 or abs(r / q - 1) < 0.03 or post["p_map"] >= 0.95:
+                    sp = sp * r
+                    speed_source += (" · refined by kinematic posterior" if abs(r - 1) < 0.03
+                                     else f" · kinematic posterior (×{r:.3g})")
         self._speed_source = speed_source
 
         # Progressive emission (feels live; also the replay timeline).
@@ -358,6 +421,71 @@ class Session:
                          "latency_ms": int((time.perf_counter() - t_id) * 1000),
                          "detail": f"identified {len(modes)} modes, {len(crit)} critical speeds"})
         self._build_twin()
+        await self.kinematic_inference(fdd_modes=fdd_modes, chans=chans)
+
+    async def kinematic_inference(self, fdd_modes=None, chans=None, override: dict | None = None) -> dict | None:
+        """Speed posterior + fault posterior for the current kinematic model; emits a `kinematics` event.
+        `override` (agent what-if) re-runs the whole inference with changed assumptions."""
+        if override:
+            self.kin_override.update({k: v for k, v in override.items() if hasattr(self.kin, k)})
+            for k, v in self.kin_override.items():
+                setattr(self.kin, k, v)
+            if getattr(self, "_kin_spec", None):
+                self.speed_post = await asyncio.to_thread(KIN.speed_posterior, *self._kin_spec, self.kin,
+                                                          line=getattr(self, "line", None))
+        if fdd_modes is not None:
+            self._fdd_for_kin = fdd_modes
+        fdd_modes = getattr(self, "_fdd_for_kin", None) or []
+        i = self.ident
+        audio = getattr(self, "_audio", None)
+        fa = fh = None
+        if getattr(self, "_kin_spec", None):
+            fa, aa = self._kin_spec
+        if audio is not None and len(audio) >= 12 * 24000:
+            fh, ah = A.spectrum(audio[-16 * 24000:], 24000, fmax=250.0, seconds=min(16.0, len(audio) / 24000))
+        ph2 = None
+        for m in fdd_modes:
+            if m.get("forced_order") == 2 and len(m.get("shape_phase_deg") or []) >= 2:
+                # compare only channels that actually carry 2x: a near-silent channel's phase is noise
+                amp = np.asarray(m.get("shape_amp") or [1.0] * len(m["shape_phase_deg"]), float)
+                p = [ph for ph, a_ in zip(m["shape_phase_deg"], amp) if a_ >= 0.3 * amp.max()]
+                if len(p) >= 2:
+                    ph2 = max(abs(((a - b + 180) % 360) - 180) for a in p for b in p)
+        sp_modes = (self.speed_post or {}).get("modes") or [{"f_hz": i["speed_hz_now"], "p": 1.0}]
+        if not self.speed_post or (i.get("speed_source") or "").startswith("video"):
+            sp_modes = [{"f_hz": i["speed_hz_now"], "p": 1.0}]  # camera measured the speed directly
+        ctx = {"kin": self.kin, "audio_f": fa, "audio_a": aa if fa is not None else None,
+               "audio_hi": (fh, ah) if fh is not None else None, "line_hz": (getattr(self, "line", None) or {}).get("line_hz"),
+               # camera orders only where the camera can see them (below 80 % of Nyquist); else aliased
+               "video_orders": ({int(k): v for k, v in i.get("orders_vel_mm_s_now", {}).items()}
+                                if 2 * i["speed_hz_now"] < 0.8 * i["nyquist_hz"] else {}),
+               "phase_2x_deg": ph2, "modes": i.get("modes"), "criticals": i.get("campbell_criticals"),
+               "fdd_modes": i.get("fdd_modes"), "sweep_frac": i.get("speed_sweep_frac"),
+               "scale_calibrated": i.get("scale_calibrated"), "cavitation": i.get("cavitation")}
+        faults = await asyncio.to_thread(KIN.fault_posterior, ctx, sp_modes)
+        f_now = i["speed_hz_now"]
+        forcing = [{"label": l["label"], "family": l["family"], "f_hz": l["order"] * f_now}
+                   for l in KIN.order_lines(self.kin, max_order=12) if l["order"] * f_now <= 1500]
+        ev = {"type": "kinematics", "kin": self.kin.to_dict(), "line": getattr(self, "line", None),
+              "speed_posterior": self.speed_post, "speed_rpm_used": f_now * 60, "speed_source": i.get("speed_source"),
+              "forcing": forcing[:40], "faults": faults,
+              "override": {k: v for k, v in self.kin_override.items() if k != "source"} or None}
+        await self.emit(ev)
+        sp_ = self.speed_post or {}
+        i["kinematics"] = {
+            "model": {k: v for k, v in self.kin.to_dict().items() if v not in (None, [], False)},
+            "line_frequency_hz": (getattr(self, "line", None) or {}).get("line_hz"),
+            "speed_posterior": ({"map_rpm": sp_.get("map_rpm"), "ci68_rpm": sp_.get("ci68_rpm"), "p_map": sp_.get("p_map"),
+                                 "modes": [{"rpm": m["rpm"], "p": m["p"], "relation": m.get("relation")} for m in sp_.get("modes", [])],
+                                 "prior": sp_.get("prior"), "explained_peaks": f'{sp_.get("n_explained")}/{sp_.get("n_peaks")}',
+                                 "display_rpm": sp_.get("display_rpm"), "display_error_pct": sp_.get("display_error_pct")}
+                                if sp_ else None),
+            "fault_posterior": [{"id": h["id"], "title": h["title"], "p": h["p"], "p_range": h["p_range"],
+                                 "prior": h["prior"], "evaluable": h["evaluable"],
+                                 "evidence": [{"feature": e["feature"], "value": e["value"], "db": round(e["db"], 1)}
+                                              for e in h["evidence"]]} for h in faults],
+        }
+        return i["kinematics"]
 
     def _build_twin(self):
         i = self.ident
@@ -412,17 +540,37 @@ class Session:
                              "model": mc.OPEN_WEIGHTS if private else mc.WONDER})
             return {"ok": True}
 
+        async def test_kinematic_hypothesis(args):
+            if args.get("revert"):
+                self.kin_override = {}
+                self.kin = KIN.Kinematics.from_scene(self.scene, self.nameplate)
+                out = await self.kinematic_inference(override={"source": self.kin.source})
+                self.kin_override = {}
+                return out
+            names = {"machine_class": "machine"}
+            ov = {names.get(k, k): v for k, v in args.items() if k != "revert" and v not in (None, "")}
+            ov["source"] = "what-if (Muse Wonder)"
+            return await self.kinematic_inference(override=ov)
+
         async def propose_setpoint(args):
             r = getattr(self, "_last_opt", None) or optimise(self.twin)
             return await self._emit_proposal(r, args.get("rationale", ""), mc.OPEN_WEIGHTS if private else mc.WONDER)
 
         try:
             await agent.run({"get_identification": get_identification, "run_optimiser": run_optimiser,
-                             "report_diagnosis": report_diagnosis, "propose_setpoint": propose_setpoint},
+                             "report_diagnosis": report_diagnosis, "propose_setpoint": propose_setpoint,
+                             "test_kinematic_hypothesis": test_kinematic_hypothesis},
                             self.emit, private=private, ledger=ledger)
         except Exception as e:
             await self.emit({"type": "error", "message": f"agent failed: {e}"})
             await self._rule_based()
+        if self.kin_override:
+            # what-ifs are transient: the agent's comparisons stay in the timeline, the final state is
+            # what Muse Spark read from the machine
+            self.kin_override = {}
+            self.kin = KIN.Kinematics.from_scene(self.scene, self.nameplate)
+            await self.kinematic_inference(override={"source": self.kin.source})
+            self.kin_override = {}
 
     async def _emit_proposal(self, r: dict, rationale: str, model: str) -> dict:
         if not r.get("feasible"):
@@ -458,6 +606,13 @@ class Session:
             await self.emit({"type": "diagnosis", "id": "d-cav", "severity": "alarm", "title": "Cavitation signature",
                              "summary": f"Cavitation index {i['cavitation']['index']:.2f}.", "evidence": [],
                              "confidence": 0.6, "model": "rules"})
+        for h in (i.get("kinematics") or {}).get("fault_posterior", []):
+            if h["evaluable"] and h["p"] >= 0.5:
+                ev = "; ".join(f"{e['feature']} {e['value']} ({e['db']:+.1f} dB)" for e in h["evidence"])
+                await self.emit({"type": "diagnosis", "id": f"d-kin-{h['id']}", "severity": "warn" if h["p"] < 0.8 else "alarm",
+                                 "title": f"{h['title']}: P = {h['p']:.2f}",
+                                 "summary": f"Fault posterior {h['p']:.2f} (prior {h['prior']:.2f}). Evidence: {ev}.",
+                                 "evidence": [], "confidence": h["p"], "model": "rules"})
         await self._emit_proposal(optimise(self.twin), "Deterministic optimiser (no LLM).", "rules")
 
     # ---------------------------------------------------------------- approval + closed-loop verification

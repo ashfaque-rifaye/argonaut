@@ -15,6 +15,7 @@ All code in this repository was written from scratch starting **2026-11-01**. Th
 | 2026-11-02 | Control-room UI (web/), plant simulator with Modbus VFD and synthetic ground-truth videos (argonaut/sim/), licensed real-footage library |
 | 2026-11-03 | Live Meta API integration: Muse Spark box localisation refined by SAM 3.1 box prompts, rigid-body sensor rejection, microphone tachometer with subharmonic refinement |
 | 2026-11-03 | Hardening: streaming engine (per-frame incremental tracking, 10 Hz telemetry, latency budget); audio-guided de-aliasing; confidence intervals and robust resonance probability; closed-loop RTO with Bayesian twin update and trust region; significance-tested verification; numeric provenance checker for agent output |
+| 2026-11-03 | Kinematic inference (docs/KINEMATICS.md): Muse Spark kinematic model, forcing-frequency families, mains-frequency detection, Bayesian harmonic-sieve speed posterior with Occam factor and physics priors, log-odds fault posterior with speed-uncertainty mixing, Muse Wonder what-if tool; synthetic fault evaluation; 5 more real machine clips (two diesel gensets, two washing machines, a centrifugal pump); console sample strip and drag-and-drop upload |
 
 ## Pre-existing tools and libraries (not our work)
 - Meta Model API and models: Muse Spark, Muse Wonder, SAM 3.1, Muse Voice Transcribe, and Muse Spark Open via Baseten

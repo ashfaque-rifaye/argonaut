@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Building2, Camera, Cog, Disc3, Droplets, ExternalLink, Fan, Film, FlaskConical, History, MonitorPlay, Radio, RefreshCw, ScanLine, Upload, Volume2, VolumeX, Wind, X } from 'lucide-react'
+import { Building2, Camera, Cog, Disc3, Droplets, ExternalLink, Fan, Film, FlaskConical, Fuel, WashingMachine, History, MonitorPlay, Radio, RefreshCw, ScanLine, Upload, Volume2, VolumeX, Wind, X } from 'lucide-react'
 import { useStore } from '../lib/store'
 import type { LibraryClip, PlayMode } from '../lib/protocol'
 import { chooseFile, chooseSim, chooseWebcam, fmtDuration, licenseOf, loadLibrary, openRecorded, PLAY_MODE_HINT, recordedRunId, startPlay } from '../lib/library'
@@ -12,8 +12,10 @@ const KIND_ICON: Record<string, (s: number) => ReactNode> = {
   rotor: (s) => <Disc3 size={s} />,
   structure: (s) => <Building2 size={s} />,
   turbine: (s) => <Wind size={s} />,
+  engine: (s) => <Fuel size={s} />,
+  washer: (s) => <WashingMachine size={s} />,
 }
-const kindIcon = (k: string, s = 11) => (KIND_ICON[k] ?? ((n: number) => <Film size={n} />))(s)
+export const kindIcon = (k: string, s = 11) => (KIND_ICON[k] ?? ((n: number) => <Film size={n} />))(s)
 const KIND_ORDER = ['fan', 'pump', 'motor', 'rotor', 'turbine', 'structure']
 
 export function KindChip({ kind }: { kind: string }) {

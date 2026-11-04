@@ -1,0 +1,350 @@
+[
+ {
+  "preset": "pump_steady_misalignment",
+  "truth": "misalignment",
+  "speed_rpm": 1476.7973311092576,
+  "faults": [
+   [
+    "misalignment",
+    0.858,
+    true
+   ],
+   [
+    "flow",
+    0.092,
+    true
+   ],
+   [
+    "looseness",
+    0.031,
+    true
+   ],
+   [
+    "imbalance",
+    0.014,
+    true
+   ],
+   [
+    "cavitation",
+    0.014,
+    true
+   ],
+   [
+    "resonance",
+    0.12,
+    false
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "misalignment",
+   0.858,
+   true
+  ],
+  "correct": true
+ },
+ {
+  "preset": "pump_cavitation",
+  "truth": "cavitation",
+  "speed_rpm": 1480.7256046705588,
+  "faults": [
+   [
+    "cavitation",
+    0.826,
+    true
+   ],
+   [
+    "imbalance",
+    0.384,
+    true
+   ],
+   [
+    "flow",
+    0.059,
+    true
+   ],
+   [
+    "looseness",
+    0.031,
+    true
+   ],
+   [
+    "resonance",
+    0.03,
+    true
+   ],
+   [
+    "misalignment",
+    0.007,
+    true
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "cavitation",
+   0.826,
+   true
+  ],
+  "correct": true
+ },
+ {
+  "preset": "imbalance_before",
+  "truth": "imbalance",
+  "speed_rpm": 1482.0350291909924,
+  "faults": [
+   [
+    "imbalance",
+    0.564,
+    true
+   ],
+   [
+    "looseness",
+    0.031,
+    true
+   ],
+   [
+    "flow",
+    0.024,
+    true
+   ],
+   [
+    "misalignment",
+    0.015,
+    true
+   ],
+   [
+    "cavitation",
+    0.009,
+    true
+   ],
+   [
+    "resonance",
+    0.12,
+    false
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "imbalance",
+   0.564,
+   true
+  ],
+  "correct": true
+ },
+ {
+  "preset": "imbalance_after",
+  "truth": null,
+  "speed_rpm": 1476.7973311092576,
+  "faults": [
+   [
+    "imbalance",
+    0.375,
+    true
+   ],
+   [
+    "flow",
+    0.078,
+    true
+   ],
+   [
+    "misalignment",
+    0.039,
+    true
+   ],
+   [
+    "looseness",
+    0.031,
+    true
+   ],
+   [
+    "resonance",
+    0.03,
+    true
+   ],
+   [
+    "cavitation",
+    0.013,
+    true
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "imbalance",
+   0.375,
+   true
+  ],
+  "correct": true
+ },
+ {
+  "preset": "fan_coastdown",
+  "truth": "resonance",
+  "speed_rpm": 1289.0735294117644,
+  "faults": [
+   [
+    "resonance",
+    0.733,
+    true
+   ],
+   [
+    "misalignment",
+    0.232,
+    true
+   ],
+   [
+    "flow",
+    0.024,
+    true
+   ],
+   [
+    "looseness",
+    0.004,
+    true
+   ],
+   [
+    "imbalance",
+    0.004,
+    true
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "cavitation",
+    0.08,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "resonance",
+   0.733,
+   true
+  ],
+  "correct": true
+ },
+ {
+  "preset": "shake_test",
+  "truth": null,
+  "speed_rpm": 493.33333333333337,
+  "faults": [
+   [
+    "misalignment",
+    0.232,
+    true
+   ],
+   [
+    "flow",
+    0.061,
+    true
+   ],
+   [
+    "looseness",
+    0.023,
+    true
+   ],
+   [
+    "cavitation",
+    0.01,
+    true
+   ],
+   [
+    "imbalance",
+    0.002,
+    true
+   ],
+   [
+    "resonance",
+    0.12,
+    false
+   ],
+   [
+    "combustion",
+    0.1,
+    false
+   ],
+   [
+    "bearing",
+    0.08,
+    false
+   ],
+   [
+    "rotor_bar",
+    0.05,
+    false
+   ]
+  ],
+  "top": [
+   "misalignment",
+   0.232,
+   true
+  ],
+  "correct": true
+ }
+]

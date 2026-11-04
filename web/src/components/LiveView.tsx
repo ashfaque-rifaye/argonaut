@@ -7,6 +7,7 @@ import { chooseFile, licenseOf, replay } from '../lib/library'
 import { useSize } from '../lib/useSize'
 import type { PipelineStage, SensorItem } from '../lib/protocol'
 import { Btn, cx, Panel } from './ui'
+import { useVideoDrop } from './SampleStrip'
 import { StageWait } from './StageWait'
 
 function shapeFor(f: number | null, items: SensorItem[]) {
@@ -54,6 +55,7 @@ export function LiveView({ compact }: { compact?: boolean }) {
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const drop = useVideoDrop()
   const [camErr, setCamErr] = useState<string | null>(null)
   const [box, size] = useSize<HTMLDivElement>()
   const polyRefs = useRef<Record<string, SVGPolygonElement | null>>({})
@@ -292,7 +294,10 @@ export function LiveView({ compact }: { compact?: boolean }) {
       }
       bodyClass="flex flex-col"
     >
-      <div ref={box} className="scope-dark relative aspect-video w-full overflow-hidden bg-black">
+      <div ref={box} {...drop.handlers} className={cx('scope-dark relative aspect-video w-full overflow-hidden bg-black', drop.over && 'ring-2 ring-inset ring-accent')}>
+        {drop.over && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/60 text-[12px] font-semibold text-white">Drop the video to run it through the engine</div>
+        )}
         {/* the simulated rig exists only in the simulator */}
         {src === 'sim' && mode === 'mock' && <img src="/mock/rig.svg" alt="Simulated camera view of fan F-101 on its stand" className="absolute inset-0 h-full w-full object-contain" draggable={false} />}
         {src === 'webcam' && <video key="cam" ref={videoRef} className="absolute inset-0 h-full w-full object-contain" autoPlay muted playsInline />}
@@ -505,8 +510,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
           <Btn size="xs" variant="subtle" onClick={sendPrompts} title="Send sensors.set to SAM 3.1">
             <ScanLine size={11} /> Place
           </Btn>
-          <Btn size="xs" variant="ghost" onClick={() => fileRef.current?.click()} title="Analyse a clip from disk (mp4/mov)" aria-label="Analyse a clip from disk">
-            <Upload size={11} />
+          <Btn size="xs" variant="subtle" onClick={() => fileRef.current?.click()} title="Analyse your own video (mp4/mov), or drop it on the view" aria-label="Upload a video to analyse">
+            <Upload size={11} /> Upload
           </Btn>
         </div>
       )}

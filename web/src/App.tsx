@@ -10,14 +10,17 @@ import { SpectrumPanel } from './components/SpectrumPanel'
 import { WaterfallPanel } from './components/WaterfallPanel'
 import { CampbellPanel } from './components/CampbellPanel'
 import { ModalPanel } from './components/ModalPanel'
+import { InferencePanel } from './components/InferencePanel'
 import { TwinPanel } from './components/TwinPanel'
 import { ProposalCard } from './components/ProposalCard'
 import { EvidenceDrawer } from './components/EvidenceDrawer'
 import { Shortcuts } from './components/Shortcuts'
 import { SourceDrawer } from './components/SourceDrawer'
+import { SampleStrip } from './components/SampleStrip'
 
 export function App() {
   const loopTab = useStore((s) => s.optimizerTab === 'loop')
+  const faultsTab = useStore((s) => s.identifyTab === 'faults')
   useEffect(() => {
     void bootstrap()
   }, [])
@@ -33,6 +36,9 @@ export function App() {
         <div className="order-1 flex min-h-0 min-w-0 flex-col gap-px xl:order-none">
           <div className="flex shrink-0" data-panel="1">
             <LiveView />
+          </div>
+          <div className="flex shrink-0">
+            <SampleStrip />
           </div>
           <div className="flex shrink-0">
             <ModelRail />
@@ -55,7 +61,7 @@ export function App() {
               <CampbellPanel />
             </div>
             <div className="flex h-[340px] min-h-0 min-w-0 xl:h-auto">
-              <ModalPanel />
+              {faultsTab ? <InferencePanel /> : <ModalPanel />}
             </div>
           </div>
         </div>

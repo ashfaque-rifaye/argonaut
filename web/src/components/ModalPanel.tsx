@@ -5,6 +5,7 @@ import { niceTicks } from '../lib/format'
 import { useSize } from '../lib/useSize'
 import type { ModalMode } from '../lib/protocol'
 import { cx, Empty, Panel } from './ui'
+import { IdentifyTabs } from './InferencePanel'
 
 const M = { l: 38, r: 10, t: 10, b: 20 }
 
@@ -114,7 +115,7 @@ export function ModalPanel() {
   const match = (f: number) => cb?.modes.find((m) => Math.abs(m.f_hz - f) < 0.5)
 
   return (
-    <Panel title="Operational modal analysis" meta={modal ? `${modal.method} · ${modal.modes.length} modes` : 'FDD'}>
+    <Panel title="Operational modal analysis" meta={modal ? `${modal.method} · ${modal.modes.length} modes` : 'FDD'} right={<IdentifyTabs />}>
       {modal ? (
         <div className="absolute inset-0 flex flex-col">
           <div className="min-h-0 flex-1">

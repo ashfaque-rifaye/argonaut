@@ -249,6 +249,71 @@ export interface ModalEvent {
   modes: ModalMode[]
 }
 
+/* v5 · kinematic model, Bayesian speed posterior, fault posterior */
+export interface KinematicModel {
+  machine: string
+  line_hz: number | null
+  poles: number | null
+  synchronous: boolean
+  blades: number | null
+  cylinders: number | null
+  stroke: number | null
+  gear_teeth: number[]
+  rated_rpm: number | null
+  display_rpm: number | null
+  source: string
+}
+export interface SpeedMode {
+  f_hz: number
+  rpm: number
+  p: number
+  relation?: string
+}
+export interface SpeedPosterior {
+  grid_rpm: number[]
+  post: number[]
+  modes: SpeedMode[]
+  map_rpm: number
+  ci68_rpm: [number, number]
+  p_map: number
+  ambiguous: boolean
+  prior: string
+  peaks: { f_hz: number; amp: number; line: string | null; family: string | null }[]
+  masked_electrical_hz: number[]
+  n_explained: number
+  n_peaks: number
+  display_rpm?: number
+  display_error_pct?: number
+}
+export interface FaultEvidence {
+  feature: string
+  value: number
+  llr: number
+  db: number
+  note: string
+}
+export interface FaultHypothesis {
+  id: string
+  title: string
+  prior: number
+  p: number
+  p_range: [number, number]
+  evaluable: boolean
+  evidence: FaultEvidence[]
+  evidence_db: number
+}
+export interface KinematicsEvent {
+  type: 'kinematics'
+  kin: KinematicModel
+  line: { line_hz: number; nominal_hz: number; prominence_db: number } | null
+  speed_posterior: SpeedPosterior | null
+  speed_rpm_used: number
+  speed_source: string
+  forcing: { label: string; family: string; f_hz: number }[]
+  faults: FaultHypothesis[]
+  override: Record<string, unknown> | null
+}
+
 export interface PumpCurve {
   q: number[]
   h: number[]
@@ -426,6 +491,7 @@ export type ServerMessage =
   | WaterfallEvent
   | CampbellEvent
   | ModalEvent
+  | KinematicsEvent
   | AssetEvent
   | DiagnosisEvent
   | ProposalEvent

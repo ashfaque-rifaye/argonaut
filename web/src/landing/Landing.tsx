@@ -321,8 +321,8 @@ const STEPS = [
   },
   {
     k: 'Identify',
-    m: ['Muse Wonder', 'FDD'],
-    d: 'Order tracking through a coast-down builds the Campbell diagram; FDD finds the modes. Every frequency and damping carries an error bar.',
+    m: ['Muse Spark', 'Muse Wonder', 'FDD'],
+    d: 'Muse Spark reads what the machine is, a four-stroke diesel or a 6-blade fan, and a Bayesian model turns that into probabilities: which speed the sound implies, which fault the evidence supports. Order tracking builds the Campbell diagram; FDD finds the modes. Every number carries an error bar.',
     v: <IdentifyOverlay />,
     tone: 'amber' as const,
     alt: 'Campbell diagram with order rays crossing three structural modes',
@@ -383,7 +383,7 @@ function How() {
                   {[
                     ['Sense', 'live view · model rail'],
                     ['Measure', 'spectrum · de-alias · waterfall'],
-                    ['Identify', 'Campbell · modal analysis'],
+                    ['Identify', 'Campbell · modal · kinematic inference'],
                     ['Optimise', 'proposal · digital twin'],
                     ['Prove', 'closed loop · verification'],
                   ].map(([a, b], i) => (
@@ -437,7 +437,7 @@ function Models() {
           ))}
           <Reveal delay={160} className="flex flex-col justify-between bg-bg-1 p-6">
             <div className="text-[13.5px] leading-relaxed text-fg-3">
-              Everything else is deterministic and inspectable: phase correlation, FFT, order tracking, FDD, the optimiser and the significance test.
+              Everything else is deterministic and inspectable: phase correlation, FFT, order tracking, FDD, the Bayesian speed and fault posteriors, the optimiser and the significance test.
             </div>
             <a href="/console" onClick={onLink} className="group mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-fg-1 hover:text-accent-2">
               See them work <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-0.5" />

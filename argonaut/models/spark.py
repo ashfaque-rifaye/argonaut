@@ -1,11 +1,13 @@
 """Muse Spark: scene + nameplate understanding, capture coaching, datasheet (pump curve) reading,
 and audio-visual corroboration — all as schema-constrained JSON."""
 
+import asyncio
 import base64
 import json
 
 import cv2
 import numpy as np
+import openai
 
 from .client import SPARK, SPARK_AUDIO, Emit, meta, stage
 
@@ -33,9 +35,29 @@ SCENE_SCHEMA = {
         "capture": {"type": "object", "properties": {
             "level": {"type": "string", "enum": ["ok", "warn", "block"]},
             "advice": {"type": "string"}}, "required": ["level", "advice"]},
+        "kinematics": {"type": "object", "description": "what the machine can physically produce, for the "
+                                                         "forcing-frequency model; 0 / '' / false when unknown",
+                       "properties": {
+                           "machine_class": {"type": "string", "enum": [
+                               "induction_motor", "fan", "centrifugal_pump", "gear_pump", "genset", "engine",
+                               "washer", "gearbox", "wind_turbine", "structure", "generic"]},
+                           "stroke": {"type": "number", "description": "engines: 4 or 2"},
+                           "cylinders": {"type": "number"},
+                           "poles": {"type": "number"},
+                           "synchronous": {"type": "boolean", "description": "synchronous generator / PM machine"},
+                           "line_hz": {"type": "number", "description": "50 or 60 only if signage, region or a display shows it"},
+                           "gear_teeth": {"type": "array", "items": {"type": "number"}},
+                           "display_rpm": {"type": "number", "description": "rpm shown on a controller / tachometer "
+                                                                           "display in the frame, else 0"},
+                           "display_hz": {"type": "number"},
+                           "rating_text": {"type": "string", "description": "ratings seen (e.g. '1500 kVA'); NEVER "
+                                                                           "copy a kVA/kW figure into an rpm field"},
+                           "evidence": {"type": "string", "description": "what in the image supports these values"}},
+                       "required": ["machine_class", "stroke", "cylinders", "poles", "synchronous", "line_hz",
+                                    "gear_teeth", "display_rpm", "display_hz", "rating_text", "evidence"]},
     },
     "required": ["machine_type", "drive", "sensor_prompts", "reference_prompt", "sensor_boxes", "scale_reference",
-                 "nameplate", "capture"],
+                 "nameplate", "capture", "kinematics"],
 }
 
 SCENE_PROMPT = """You are the field eyes of a vibration and machinery-dynamics engineer.
@@ -51,6 +73,14 @@ Look at this frame of an industrial machine.
   coin, bolt head, standard brick 230 mm) and estimate its size in pixels in this image.
 - Read the nameplate if visible (rpm, kW, poles); use 0 for unknown numbers and '' for unknown text.
   For fans/pumps estimate blade or vane count if visible (0 if unknown).
+- Kinematics (drives the forcing-frequency model, so be literal): the machine class (genset when a diesel
+  engine, a generating-set enclosure or a generator controller is visible: exhaust stack, radiator, engine
+  block, a controller showing Hz / kVA / rpm such as PowerCommand or DeepSea; an electric motor driving a
+  dynamometer, load, pump or fan is induction_motor or that driven machine); for engines and
+  gensets the stroke (diesel gensets are 4-stroke) and cylinder count if countable; motor/generator poles
+  only from a nameplate; line frequency only if a display or nameplate shows it; gear tooth counts only
+  if countable. If a controller or tachometer display is visible, copy its rpm and Hz exactly.
+  A rating such as "1500 kVA" or "15 kW" is NOT a speed. Use 0 / '' / false for anything not visible.
 - Judge the capture for measurement: 'block' if the machine is out of frame, blurry or moving camera;
   'warn' if usable but improvable; give one concrete instruction."""
 
@@ -65,13 +95,20 @@ async def _json(model: str, content: list[dict], schema: dict, name: str, max_to
     last = None
     extra = {"reasoning": {"effort": effort}} if effort else {}
     for budget in (max_tokens, max_tokens * 2):  # reasoning shares the output budget; retry once with more room
-        r = await meta().responses.create(
-            model=model,
-            input=[{"type": "message", "role": "user", "content": content}],
-            text={"format": {"type": "json_schema", "name": name, "schema": schema}},
-            max_output_tokens=budget,
-            **extra,
-        )
+        for attempt in range(3):  # transient network failures: back off and retry
+            try:
+                r = await meta().responses.create(
+                    model=model,
+                    input=[{"type": "message", "role": "user", "content": content}],
+                    text={"format": {"type": "json_schema", "name": name, "schema": schema}},
+                    max_output_tokens=budget,
+                    **extra,
+                )
+                break
+            except (openai.APIConnectionError, openai.APITimeoutError):
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(2 * (attempt + 1))
         try:
             return json.loads(r.output_text)
         except json.JSONDecodeError as e:

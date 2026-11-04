@@ -173,3 +173,27 @@ REST `POST /api/sessions/{id}/rto/stop` → `{ok}`.
   - `stream`: the clip is fed frame by frame into the live camera engine (latency, de-aliasing, mic tachometer). Same path as a webcam.
   - The server emits a `media` event (`url`, plus `clip_id` and `mode`), so the Live view plays the same video in sync.
 - Starting a new play cancels the previous one in that session.
+
+## v5 additions: kinematic inference
+
+Emitted once per analysed clip, after identification, and again after every what-if (`test_kinematic_hypothesis`). Maths in `docs/KINEMATICS.md`.
+
+```jsonc
+{"type":"kinematics",
+ "kin":{"machine":"genset","stroke":4,"cylinders":null,"poles":null,"synchronous":true,"blades":null,
+        "gear_teeth":[],"line_hz":null,"rated_rpm":null,"display_rpm":1542,"source":"muse-spark"},
+ "line":{"line_hz":49.94,"nominal_hz":50,"prominence_db":13.4} | null,
+ "speed_posterior":{"grid_rpm":[...360], "post":[...360, max 1], "map_rpm":1542.4, "ci68_rpm":[1540,1545], "p_map":0.82,
+                    "ambiguous":false, "prior":"scale-invariant (flat in log f)",
+                    "modes":[{"f_hz":25.7,"rpm":1542,"p":0.82},{"f_hz":12.85,"rpm":771,"p":0.10,"relation":"½×"}],
+                    "peaks":[{"f_hz":206.0,"amp":1.0,"line":"8×","family":"shaft"}, ...],
+                    "masked_electrical_hz":[], "n_explained":14, "n_peaks":18,
+                    "display_rpm":1542, "display_error_pct":0.03} | null,
+ "speed_rpm_used":1542.4, "speed_source":"audio (tonal order) · kinematic posterior (×2)",
+ "forcing":[{"label":"0.5×","family":"half_order","f_hz":12.85}, ...],
+ "faults":[{"id":"combustion","title":"Cylinder-to-cylinder combustion imbalance","prior":0.10,"p":0.21,
+            "p_range":[0.18,0.25],"evaluable":true,"evidence_db":3.8,
+            "evidence":[{"feature":"½-order / firing-order ratio","value":0.41,"llr":0.31,"db":1.4,"note":"..."}]}, ...],
+ "override":null | {"blades":6,"source":"what-if (Muse Wonder)"}}
+```
+`faults` are sorted evaluable first, then by `p`. A hypothesis with `evaluable:false` had none of the evidence it needs, so the UI greys it out instead of guessing. `identification` (agent tool) gains the same content under `kinematics`.

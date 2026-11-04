@@ -22,6 +22,7 @@ The v2 analysis (prior art, IP, naming, rules) still applies and is kept in git 
 |---|---|
 | *Where* to measure: name parts, refuse rotating ones (SAM 3.1 + Muse Spark) | Sub-pixel motion, shake cancellation, spectra with CIs |
 | Physical context: nameplate rpm, blade/vane count, scale reference, pump-curve datasheet (Muse Spark) | Order tracking, de-aliasing, resonance fits, FDD |
+| *What the machine can produce*: a kinematic model (class, engine stroke, cylinders, poles, gear teeth, a controller display's rpm) (Muse Spark) | Forcing-frequency families, Bayesian speed posterior (harmonic sieve with Occam factor), log-odds fault posterior (`docs/KINEMATICS.md`) |
 | Experiment design and diagnosis by practitioner rules, explained (Muse Wonder) | Digital twin, robust optimisation, Bayesian update, significance tests |
 | Hands-free field operation in code-switched speech (Voice Transcribe) | |
 
@@ -38,12 +39,14 @@ The agent never produces a number. Every number it writes is checked against too
   - The twin's posterior natural frequency settles at 14.6 Hz against a plant truth of 14.2 Hz. Its single-mode, unbalance-forcing model is simpler than the plant. Decisions stay safe because the optimiser uses the uncertainty band, not the point estimate.
   - Without a nameplate speed, the microphone can't tell which shaft order it hears. The camera's aliases decide it, and that decision is sensitive to sensor placement under heavy hand shake: −37 ± 34% across perturbed regions on the 60 fps shake test. Muse Spark reading the nameplate removes the ambiguity.
   - Motions below about 0.03 px are attenuated by H.264 and by the tracker (median gain 0.8–0.9).
-- **Real footage** (10 published clips in `data/library`; no tachometer ground truth exists for them):
-  - Frequencies, orders and cross-modal consistency are reliable. Examples:
-    - The induction-motor test bench reads **2,978 rpm**, a 2-pole 50 Hz motor at 0.7% slip.
-    - The 2.13 m exhaust fan's steady audio is a clean blade-pass series at **41.25 Hz**. With the 6 blades Muse Spark counted, that gives ≈**412 rpm** (tip speed ≈46 m/s, typical).
+- **Fault posterior on synthetic ground truth** (`scripts/fault_eval.py`): the top hypothesis matches the rendered fault on 6 of 6 clips (misalignment 0.86, cavitation 0.83, imbalance 0.56, coast-down resonance 0.73; nothing ≥ 0.5 on the balanced and the healthy clip).
+- **Real footage** (15 published clips in `data/library`: fans, diesel gensets, washing machines, pumps, motors, a rotor rig, a wind turbine, a bridge). Tachometer ground truth exists only where a display shows it:
+  - **Genset with a controller display (51.3 Hz / 1,542 rpm):** the microphone's kinematic posterior gives **1,542.4 rpm** without seeing the display (+0.03%). Without the four-stroke model it would read 771 rpm.
+  - **1500 kVA genset:** every audio line is a multiple of 12.49 Hz; the measured 49.94 Hz generator line and the four-stroke half-order model give **1,498 rpm (P 0.98)** instead of 750.
+  - **2.13 m exhaust fan:** with the 6 blades Muse Spark counted, **413 rpm (P 0.97)**; without the count, 2,477 rpm (the blade pass read as 1×).
+  - **Correction:** an earlier version reported 2,978 rpm for the induction-motor bench. That was the 49.74 Hz mains line read as 1×. Its audio is dominated by electrical lines, and the posterior now says the speed is not identifiable from it (P(MAP) 0.39).
   - Absolute mm/s is only claimed with a credible scale reference and plausible levels. Handheld, unscaled footage is reported as **relative** ("uncalibrated"), and the agent is instructed not to issue ISO zones then. In our first real runs, Muse Wonder had already flagged 400–1500 mm/s readings as implausible instead of alarming.
-  - Without a nameplate or blade count, which order the microphone hears stays ambiguous. An induction-motor synchronous-speed prior (0–6% slip) and the camera's alias check narrow it, but these are priors, not proof.
+  - Without a nameplate, blade count or engine model, which order the microphone hears can stay ambiguous. The speed posterior now reports that ambiguity as probabilities (modes with their relation, ½×, 2×…) instead of hiding it, and Muse Wonder can test alternative kinematics before concluding.
 
 ---
 

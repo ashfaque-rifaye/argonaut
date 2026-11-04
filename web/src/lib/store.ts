@@ -12,6 +12,7 @@ import type {
   LibraryClip,
   PlayMode,
   ModalEvent,
+  KinematicsEvent,
   PipelineEvent,
   PipelineStage,
   ProposalEvent,
@@ -108,6 +109,8 @@ interface State {
   selectedChannel: string | null
   campbell: CampbellEvent | null
   modal: ModalEvent | null
+  kinematics: KinematicsEvent | null
+  identifyTab: 'modes' | 'faults'
   asset: AssetEvent | null
   diagnoses: DiagnosisEvent[]
   proposal: ProposalEvent | null
@@ -224,6 +227,8 @@ const initial = () => ({
   selectedChannel: null as string | null,
   campbell: null,
   modal: null,
+  kinematics: null,
+  identifyTab: 'modes' as 'modes' | 'faults',
   asset: null,
   diagnoses: [] as DiagnosisEvent[],
   proposal: null,
@@ -379,6 +384,10 @@ export const useStore = create<State>((set, get) => ({
         return
       case 'modal':
         set({ msgCount, modal: m })
+        return
+      case 'kinematics':
+        // first inference of a source brings the panel forward; later what-ifs keep the operator's tab
+        set({ msgCount, kinematics: m, identifyTab: s.kinematics ? s.identifyTab : 'faults' })
         return
       case 'asset':
         set({ msgCount, asset: m, assetName: m.name })

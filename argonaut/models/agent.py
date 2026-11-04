@@ -25,6 +25,13 @@ Workflow:
    operation -> resonance (critical speed); high-frequency impulsive noise + cavitation index -> cavitation.
 3. If the asset is variable-speed, call run_optimiser and then propose_setpoint with the result and a
    short engineering rationale (resonance margin, duty, specific energy, NPSH). A human must approve.
+Kinematics: get_identification includes `kinematics` - the machine model Muse Spark read (class, stroke,
+blades, poles, display rpm), a Bayesian speed posterior (modes with probabilities, prior used, peaks
+explained) and a fault posterior (P per hypothesis with evidence in decibans; `evaluable: false` means
+the evidence needed is missing - say what capture would provide it). If the speed posterior is
+ambiguous (p_map < 0.8) or a kinematic assumption is doubtful, call test_kinematic_hypothesis with the
+alternative (e.g. blades, stroke, machine_class) and compare posteriors before concluding; report the
+probabilities, not certainty. A display_rpm read from the frame is an independent check: report the error.
 If scale_calibrated is false, do NOT report ISO zones or absolute mm/s severity: say amplitudes are
 relative (uncalibrated scale) and base conclusions on frequencies, orders, phase and ratios only.
 Be concise, technical and specific. Use units."""
@@ -41,6 +48,16 @@ TOOLS = [
          "duty_min_frac": {"type": "number", "description": "minimum flow as fraction of current, e.g. 0.8"},
          "resonance_margin": {"type": "number", "description": "fractional separation from critical speeds, e.g. 0.1"}},
          "required": ["duty_min_frac", "resonance_margin"]}},
+    {"type": "function", "name": "test_kinematic_hypothesis",
+     "description": "What-if: re-run the Bayesian speed posterior and the fault posterior under changed kinematic "
+                    "assumptions (only the fields you pass change). Returns the new kinematics block. Use revert=true "
+                    "to go back to what Muse Spark read.",
+     "parameters": {"type": "object", "properties": {
+         "machine_class": {"type": "string", "enum": ["induction_motor", "fan", "centrifugal_pump", "gear_pump", "genset",
+                                                      "engine", "washer", "gearbox", "wind_turbine", "structure", "generic"]},
+         "blades": {"type": "integer"}, "cylinders": {"type": "integer"}, "stroke": {"type": "integer"},
+         "poles": {"type": "integer"}, "line_hz": {"type": "number"}, "revert": {"type": "boolean"}},
+         "required": []}},
     {"type": "function", "name": "report_diagnosis",
      "description": "Publish one finding to the operator with evidence.",
      "parameters": {"type": "object", "properties": {

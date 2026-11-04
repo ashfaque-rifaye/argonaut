@@ -51,7 +51,8 @@ def cavitation_index(x: np.ndarray, fs: int, frame_s: float = 0.05) -> dict:
     frac = float(np.sum(xh**2) / (np.sum(x**2) + 1e-12))
     n = int(frame_s * fs)
     frames = xh[: len(xh) // n * n].reshape(-1, n) if len(xh) >= n else xh[None, :]
-    kurt = float(np.median(stats.kurtosis(frames, axis=1, fisher=True)))
+    k = stats.kurtosis(frames, axis=1, fisher=True)  # NaN for digitally silent (zero-variance) frames
+    kurt = float(np.nanmedian(k)) if np.isfinite(k).any() else 0.0
     index = float(np.clip(frac * 4 + max(kurt, 0) / 6, 0, 1))
     return {"index": index, "hf_energy_fraction": frac, "hf_kurtosis": kurt}
 
