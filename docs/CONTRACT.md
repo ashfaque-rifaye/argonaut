@@ -197,3 +197,17 @@ Emitted once per analysed clip, after identification, and again after every what
  "override":null | {"blades":6,"source":"what-if (Muse Wonder)"}}
 ```
 `faults` are sorted evaluable first, then by `p`. A hypothesis with `evaluable:false` had none of the evidence it needs, so the UI greys it out instead of guessing. `identification` (agent tool) gains the same content under `kinematics`.
+
+## v6 additions: agents that act, live feeds
+
+```jsonc
+{"type":"action", "id":"a1b2c3", "kind":"balance"|"skip_bands"|"work_order"|"impact"|"followup",
+ "title":"Field-balance the rotor", "rationale":"Imbalance P=0.56 ...", "proposer":"muse-wonder-1.0"|"rules",
+ "status":"proposed"|"needs_drive"|"running"|"done"|"failed"|"rejected", "requires_approval":true,
+ "params":{...}, "steps":[{"t":4.0, "text":"Baseline 1x vector V0 = ...", "status":"done"|"warn", "data":{...}}],
+ "result":{...} | null, "error":"..."}
+```
+- The same `action` id is re-emitted on every change; the UI keeps the latest. Physical actions (`balance`, `skip_bands`) wait for approval and need a connected drive; without one they arrive as `needs_drive`.
+- `POST /api/sessions/{id}/actions/{aid} {approved, note?}` approves or rejects; `POST /api/sessions/{id}/actions/plan` queues the deterministic plan; `GET /api/sessions/{id}/actions/{aid}/workorder.md` downloads a work order.
+- `POST /api/sessions/{id}/feed {url, name?}` connects an RTSP / HTTP / HLS stream (or a camera index) to the live engine; the `media` event then has `kind:"mjpeg"` and `url:"/api/sessions/{id}/feed.mjpg"`.
+- Replays accept `?speed=N` (`/ws/replay/{run}?speed=4`; the console forwards `/console?replay=...&speed=4`).

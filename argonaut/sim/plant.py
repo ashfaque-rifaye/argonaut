@@ -126,6 +126,12 @@ class PlantConfig:
     vel_floor_mm_s: float = 0.2
     recirc_mm_s: float = 1.5  # added broadband at very low flow (recirculation)
     cavitation_mm_s: float = 2.5  # added broadband at full cavitation
+    # Rotor unbalance (drives the 1x term): residual unbalance vector in g.mm at an angle on the
+    # balancing plane, the plane radius where weights are fitted, and the rotor mass (ISO 21940-11).
+    unbalance_gmm: float = 2400.0  # out of tolerance: ISO 21940-11 G6.3 allows ~1000 g.mm at 1480 rpm
+    unbalance_deg: float = 40.0
+    balance_radius_mm: float = 120.0
+    rotor_mass_kg: float = 25.0
     # VFD
     ramp_rpm_s: float = 150.0
 
@@ -256,7 +262,39 @@ def structural_frf(cfg: PlantConfig, f_hz):
     return amp
 
 
-def vibration(cfg: PlantConfig, speed_rpm: float, q: float, cavitation_index: float) -> dict:
+def structural_frf_complex(cfg: PlantConfig, f_hz: float) -> complex:
+    """Complex receptance-like FRF (rigid + modal SDOF terms): its phase is the lag a keyphasor sees."""
+    h = complex(cfg.rigid_response, 0.0)
+    for m in cfg.modes:
+        r = f_hz / m.fn_hz
+        h += m.participation / complex(1.0 - r * r, 2.0 * m.zeta * r)
+    return h
+
+
+def unbalance_vector(cfg: PlantConfig, added: list[tuple[float, float]] = ()) -> complex:
+    """Total unbalance (g.mm, complex) = residual + sum of fitted masses (grams at the plane radius)."""
+    u = cfg.unbalance_gmm * complex(math.cos(math.radians(cfg.unbalance_deg)), math.sin(math.radians(cfg.unbalance_deg)))
+    for g, deg in added:
+        u += g * cfg.balance_radius_mm * complex(math.cos(math.radians(deg)), math.sin(math.radians(deg)))
+    return u
+
+
+def one_x_vector(cfg: PlantConfig, speed_rpm: float, unbalance: complex) -> tuple[float, float]:
+    """1x velocity (mm/s RMS) and phase (deg, keyphasor-referenced) for a given unbalance vector."""
+    if speed_rpm <= 1.0:
+        return 0.0, 0.0
+    f1 = speed_rpm / 60.0
+    s = (speed_rpm / cfg.rated_rpm) ** 2
+    d_um = cfg.exc_um["1"] * abs(unbalance) / max(cfg.unbalance_gmm, 1e-9)
+    x_um = d_um * s * float(structural_frf(cfg, f1))
+    vel = 2 * math.pi * f1 * x_um / 1000.0 / math.sqrt(2)
+    phase = math.degrees(math.atan2(unbalance.imag, unbalance.real)) - math.degrees(math.atan2(
+        structural_frf_complex(cfg, f1).imag, structural_frf_complex(cfg, f1).real)) + 90.0  # velocity leads displacement
+    return vel, phase % 360.0
+
+
+def vibration(cfg: PlantConfig, speed_rpm: float, q: float, cavitation_index: float,
+              unbalance_scale: float = 1.0) -> dict:
     """Predicted velocity RMS (mm/s), overall and per component."""
     if speed_rpm <= 1.0:
         return {"overall": 0.0, "components": {}}
@@ -268,6 +306,8 @@ def vibration(cfg: PlantConfig, speed_rpm: float, q: float, cavitation_index: fl
         k = _order_value(cfg, key)
         f = k * f1
         hyd = 1.0 + 1.5 * (q_rel - 1.0) ** 2 if key == "vp" else 1.0
+        if key == "1":
+            d_um *= unbalance_scale  # balancing changes the 1x forcing
         x_um = d_um * s * float(structural_frf(cfg, f)) * hyd
         comps[f"{k}x"] = 2 * math.pi * f * x_um / 1000.0 / math.sqrt(2)
     run = min(speed_rpm / cfg.rated_rpm, 1.0)
@@ -280,7 +320,7 @@ def vibration(cfg: PlantConfig, speed_rpm: float, q: float, cavitation_index: fl
     return {"overall": overall, "components": comps}
 
 
-def evaluate(cfg: PlantConfig, speed_rpm: float, throttle: float = 0.0) -> dict:
+def evaluate(cfg: PlantConfig, speed_rpm: float, throttle: float = 0.0, unbalance_scale: float = 1.0) -> dict:
     """Full steady-state plant state at a given shaft speed (pure function)."""
     n = max(float(speed_rpm), 0.0)
     q, h = operating_point(cfg, n, throttle)
@@ -295,7 +335,7 @@ def evaluate(cfg: PlantConfig, speed_rpm: float, throttle: float = 0.0) -> dict:
     else:
         npsha = npshr = margin = None
         cav_index, cavitating = 0.0, False
-    vib = vibration(cfg, n, q, cav_index)
+    vib = vibration(cfg, n, q, cav_index, unbalance_scale)
     spec = kw / q if q > 1e-6 else None
     return {
         "kind": cfg.kind,
@@ -375,6 +415,8 @@ class Plant:
         self.ramp_rpm_s = self.cfg.ramp_rpm_s
         self.noise = noise
         self._rng = random.Random(seed)
+        self.added_masses: list[tuple[float, float]] = []   # (grams, deg) fitted on the balancing plane
+        self.skip_bands: list[tuple[float, float]] = []     # VFD skip frequencies: (centre rpm, half-width rpm)
         self._lock = threading.RLock()
         self._t_last = time.monotonic()
         self.t = 0.0
@@ -383,8 +425,43 @@ class Plant:
     def set_setpoint(self, rpm: float) -> float:
         with self._lock:
             self.update()
-            self.setpoint_rpm = float(min(max(rpm, self.cfg.min_rpm), self.cfg.max_rpm))
+            rpm = float(min(max(rpm, self.cfg.min_rpm), self.cfg.max_rpm))
+            for c, hw in self.skip_bands:  # a VFD never dwells inside a skip band: snap to the nearer edge
+                if hw > 0 and c - hw < rpm < c + hw:
+                    rpm = c - hw if rpm < c else c + hw
+            self.setpoint_rpm = rpm
             return self.setpoint_rpm
+
+    # --- balancing plane and drive parameters ---------------------------------------------
+    @property
+    def unbalance(self) -> complex:
+        return unbalance_vector(self.cfg, self.added_masses)
+
+    @property
+    def unbalance_scale(self) -> float:
+        return abs(self.unbalance) / max(self.cfg.unbalance_gmm, 1e-9)
+
+    def fit_mass(self, grams: float, deg: float) -> None:
+        with self._lock:
+            self.added_masses.append((float(grams), float(deg) % 360.0))
+
+    def remove_last_mass(self) -> None:
+        with self._lock:
+            if self.added_masses:
+                self.added_masses.pop()
+
+    def set_skip_bands(self, bands: list[tuple[float, float]]) -> None:
+        with self._lock:
+            self.skip_bands = [(float(c), float(hw)) for c, hw in bands if hw > 0][:3]
+            self.set_setpoint(self.setpoint_rpm)
+
+    def one_x(self, noisy: bool = False) -> tuple[float, float]:
+        with self._lock:
+            vel, ph = one_x_vector(self.cfg, self.speed_rpm, self.unbalance)
+        if noisy:
+            vel *= 1.0 + self._rng.gauss(0.0, 0.02)
+            ph += self._rng.gauss(0.0, 2.0)
+        return vel, ph % 360.0
 
     def set_ramp(self, rpm_per_s: float) -> None:
         with self._lock:
@@ -415,14 +492,16 @@ class Plant:
     # --- outputs -------------------------------------------------------------------------
     def state(self, noisy: bool = False) -> dict:
         with self._lock:
-            st = evaluate(self.cfg, self.speed_rpm, self.throttle)
+            st = evaluate(self.cfg, self.speed_rpm, self.throttle, self.unbalance_scale)
+            st["one_x_mm_s"], st["one_x_phase_deg"] = one_x_vector(self.cfg, self.speed_rpm, self.unbalance)
             st["setpoint_rpm"] = self.setpoint_rpm
             st["ramp_rpm_s"] = self.ramp_rpm_s
             st["ramping"] = abs(self.setpoint_rpm - self.speed_rpm) > 0.5
             st["t"] = self.t
         if noisy and self.noise > 0:
-            for k in ("speed_rpm", "q", "h", "kw", "vel_mm_s_rms"):
+            for k in ("speed_rpm", "q", "h", "kw", "vel_mm_s_rms", "one_x_mm_s"):
                 st[k] = max(st[k] * (1.0 + self._rng.gauss(0.0, self.noise)), 0.0)
+            st["one_x_phase_deg"] = (st["one_x_phase_deg"] + self._rng.gauss(0.0, 100 * self.noise)) % 360.0
         return st
 
     def sweep(self, speeds, throttle: float | None = None) -> dict:
@@ -463,7 +542,11 @@ class Plant:
 HR_SPEED_SETPOINT_RPM = 0  # rpm
 HR_RAMP_RPM_S = 1  # rpm/s accel/decel limit
 HR_THROTTLE_PERMILLE = 2  # suction valve closure 0..950 (0 = open)
-N_HR = 3
+HR_BAL_MASS_CG = 3  # balancing: mass to fit, centigrams
+HR_BAL_ANGLE_DEG = 4  # balancing: angle on the plane, degrees from the keyphasor mark
+HR_BAL_CMD = 5  # write 1 = fit the mass, 2 = remove the last fitted mass
+HR_SKIP_BASE = 6  # 3 skip bands: (centre rpm, half-width rpm) at 6/7, 8/9, 10/11
+N_HR = 12
 
 # Input registers (FC4 read), 0-based addresses
 IR_SPEED_RPM = 0  # rpm
@@ -479,7 +562,10 @@ IR_NPSHR_X100 = 9  # m x100
 IR_STATUS = 10  # bit0 running, bit1 ramping, bit2 cavitating, bit3 at setpoint
 IR_SETPOINT_RPM = 11  # setpoint echo, rpm
 IR_SHAFT_KW_X100 = 12  # shaft kW x100
-N_IR = 13
+IR_1X_VEL_X100 = 13  # 1x velocity mm/s RMS x100 (keyphasor-synchronous)
+IR_1X_PHASE_X10 = 14  # 1x phase deg x10 from the keyphasor mark
+IR_N_MASSES = 15  # balancing masses currently fitted
+N_IR = 16
 NA = 0xFFFF
 
 REGISTER_MAP = {
@@ -502,6 +588,9 @@ REGISTER_MAP = {
         IR_STATUS: ("status", 1),
         IR_SETPOINT_RPM: ("setpoint_rpm", 1),
         IR_SHAFT_KW_X100: ("shaft_kw", 100),
+        IR_1X_VEL_X100: ("one_x_mm_s", 100),
+        IR_1X_PHASE_X10: ("one_x_phase_deg", 10),
+        IR_N_MASSES: ("n_masses", 1),
     },
 }
 
@@ -546,13 +635,17 @@ class ModbusPlantServer:
         from pymodbus.simulator import DataType, SimData, SimDevice
 
         plant = self.plant
-        hr_init = [int(plant.setpoint_rpm), int(plant.ramp_rpm_s), int(round(plant.throttle * 1000))]
+        hr_init = [int(plant.setpoint_rpm), int(plant.ramp_rpm_s), int(round(plant.throttle * 1000))] + [0] * (N_HR - 3)
+        pending = {"cg": 0, "deg": 0}
+        skip_regs = [0] * 6  # shadow of the skip-band registers: a band takes effect once its width is non-zero
         ir_init = encode_input_registers(plant.state())
 
         async def action(fc, start, address, count, regs, set_values):  # noqa: ARG001
             plant.update()
             if fc == 4:  # read input registers: refresh from the plant
-                vals = encode_input_registers(plant.state(noisy=True))
+                st = plant.state(noisy=True)
+                st["n_masses"] = len(plant.added_masses)
+                vals = encode_input_registers(st)
                 for i, v in enumerate(vals):
                     regs[i - start] = v
                 return None
@@ -560,6 +653,11 @@ class ModbusPlantServer:
                 regs[HR_SPEED_SETPOINT_RPM - start] = int(round(plant.setpoint_rpm))
                 regs[HR_RAMP_RPM_S - start] = int(round(plant.ramp_rpm_s))
                 regs[HR_THROTTLE_PERMILLE - start] = int(round(plant.throttle * 1000))
+                extra = [pending["cg"], pending["deg"], 0] + list(skip_regs)
+                for i, v in enumerate(extra):
+                    reg = HR_BAL_MASS_CG + i
+                    if start <= reg < start + count:
+                        regs[reg - start] = v
                 return None
             if set_values is not None:  # writes (FC6 / FC16)
                 for i, v in enumerate(list(set_values)):
@@ -572,6 +670,19 @@ class ModbusPlantServer:
                     elif reg == HR_THROTTLE_PERMILLE:
                         plant.set_throttle(float(v) / 1000.0)
                         set_values[i] = int(round(plant.throttle * 1000))
+                    elif reg == HR_BAL_MASS_CG:
+                        pending["cg"] = int(v)
+                    elif reg == HR_BAL_ANGLE_DEG:
+                        pending["deg"] = int(v) % 360
+                    elif reg == HR_BAL_CMD:
+                        if int(v) == 1:
+                            plant.fit_mass(pending["cg"] / 100.0, pending["deg"])
+                        elif int(v) == 2:
+                            plant.remove_last_mass()
+                        set_values[i] = 0
+                    elif HR_SKIP_BASE <= reg < HR_SKIP_BASE + 6:
+                        skip_regs[reg - HR_SKIP_BASE] = int(v)
+                        plant.set_skip_bands([(skip_regs[2 * b], skip_regs[2 * b + 1]) for b in range(3)])
                     else:
                         return ExcCodes.ILLEGAL_ADDRESS
             return None

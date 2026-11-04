@@ -1,17 +1,49 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "api",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "uvicorn", "argonaut.server:app", "--port", "8000"],
-      "port": 8000
-    },
-    {
-      "name": "web",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "web", "dev"],
-      "port": 5173
-    }
-  ]
+﻿{
+    "version":  "0.0.1",
+    "configurations":  [
+                           {
+                               "name":  "api",
+                               "runtimeExecutable":  "uv",
+                               "runtimeArgs":  [
+                                                   "run",
+                                                   "uvicorn",
+                                                   "argonaut.server:app",
+                                                   "--port",
+                                                   "8000"
+                                               ],
+                               "port":  8000
+                           },
+                           {
+                               "name":  "web",
+                               "runtimeExecutable":  "pnpm",
+                               "runtimeArgs":  [
+                                                   "--dir",
+                                                   "web",
+                                                   "dev"
+                                               ],
+                               "port":  5173
+                           },
+                           {
+                               "name":  "plant",
+                               "runtimeExecutable":  "uv",
+                               "runtimeArgs":  [
+                                                   "run",
+                                                   "python",
+                                                   "-m",
+                                                   "argonaut.sim.plant",
+                                                   "--kind",
+                                                   "pump",
+                                                   "--modbus-port",
+                                                   "5020",
+                                                   "--noise",
+                                                   "0.02",
+                                                   "--speed",
+                                                   "1480",
+                                                   "--ramp",
+                                                   "300",
+                                                   "--quiet"
+                                               ],
+                               "port":  5020
+                           }
+                       ]
 }

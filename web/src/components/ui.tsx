@@ -5,6 +5,35 @@ import { StageWait } from './StageWait'
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
+/** Plain-language explanation of every panel, shown by its (i) badge and used by the onboarding tour. */
+export const PANEL_INFO: Record<string, string> = {
+  'live view': 'The machine footage. Coloured regions are <b>virtual sensors</b> SAM 3.1 placed by name; each tracks sub-pixel motion like a contact-free accelerometer. <b>REF</b> is a static surface used to cancel camera shake.',
+  spectrum: 'How strongly the machine vibrates at each frequency. Peaks at whole multiples of shaft speed (<b>1×, 2×…</b>) point to specific faults: 1× imbalance, 2× misalignment, blade pass flow.',
+  waterfall: 'The spectrum over time, newest at the top. Lines that move with speed are <b>orders</b>; lines that stay put are <b>structural resonances</b>.',
+  'campbell diagram': 'Speed against frequency. Where an order line crosses a natural frequency the machine <b>resonates</b>: a speed to avoid or lock out.',
+  'resonance curve': 'Amplitude through a run-up or coast-down, with the fitted single-degree-of-freedom resonance: natural frequency and damping with error bars.',
+  'operational modal analysis': 'Natural frequencies and mode shapes found from all virtual sensors together (frequency domain decomposition), with no hammer test.',
+  'kinematic inference': 'Muse Spark reads what the machine <b>is</b> (engine stroke, blades, poles). A Bayesian model turns that into probabilities: which <b>speed</b> the sound implies and how likely each <b>fault</b> is, evidence in dB.',
+  'digital twin': 'A model of this machine built from the measurements: predicted vibration and power at every speed, with uncertainty bands.',
+  optimizer: 'The operating speed Muse Wonder proposes: least energy, clear of resonance bands, inside duty limits. <b>Nothing changes until you approve.</b>',
+  'agent console': 'Muse Wonder thinking out loud. It only works from tool results, and every number it writes is <b>checked against the measurements</b> (✓ verified).',
+  'model rail': 'Which Meta model is working right now and how long each call took: SAM 3.1, Muse Spark, Muse Wonder, Voice Transcribe, Muse Spark Open.',
+  'agent actions': 'What the agents <b>do</b> about it: field-balance the rotor, lock the drive out of resonance, write the work order, cost the savings, schedule the re-check. Physical actions wait for your approval, then run and verify.',
+}
+
+export function InfoDot({ tip }: { tip: string }) {
+  return (
+    <span
+      tabIndex={0}
+      data-tip={tip}
+      aria-label="What is this?"
+      className="inline-flex h-[15px] w-[15px] shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[9px] font-semibold text-fg-3 hover:border-accent/60 hover:text-accent-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+    >
+      i
+    </span>
+  )
+}
+
 export function Panel({
   title,
   meta,
@@ -13,6 +42,7 @@ export function Panel({
   className,
   bodyClass,
   id,
+  info,
 }: {
   title: ReactNode
   meta?: ReactNode
@@ -21,17 +51,60 @@ export function Panel({
   className?: string
   bodyClass?: string
   id?: string
+  info?: string
 }) {
+  const tip = info ?? (typeof title === 'string' ? PANEL_INFO[title.toLowerCase()] : undefined)
   return (
-    <section id={id} className={cx('flex min-h-0 min-w-0 flex-1 flex-col bg-bg-1', className)}>
-      <header className="flex h-8 shrink-0 items-center gap-2 overflow-hidden border-b border-line-1 bg-bg-1 pl-3 pr-2">
+    <section id={id} className={cx('glass flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', className)}>
+      <header className="glass-head flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b border-line-1/70 pl-3.5 pr-2">
         <h2 className="eyebrow shrink-0 whitespace-nowrap">{title}</h2>
+        {tip && <InfoDot tip={tip} />}
         {meta && <div className="num min-w-0 truncate text-[10.5px] text-fg-4">{meta}</div>}
         <div className="ml-auto flex shrink-0 items-center gap-1">{right}</div>
       </header>
       <div className={cx('relative min-h-0 flex-1', bodyClass)}>{children}</div>
     </section>
   )
+}
+
+/** One tooltip for the whole app: any element with data-tip (HTML allowed: our own strings only). */
+export function TipLayer() {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current!
+    let cur: Element | null = null
+    const show = (t: Element) => {
+      cur = t
+      el.innerHTML = t.getAttribute('data-tip') ?? ''
+      const r = t.getBoundingClientRect()
+      el.dataset.on = '1'
+      const w = el.offsetWidth
+      const h = el.offsetHeight
+      const below = r.bottom + h + 10 < window.innerHeight
+      el.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`
+      el.style.top = `${below ? r.bottom + 8 : r.top - h - 8}px`
+    }
+    const hide = () => {
+      cur = null
+      el.dataset.on = '0'
+    }
+    const over = (e: Event) => {
+      const t = (e.target as Element | null)?.closest?.('[data-tip]')
+      if (t && t !== cur) show(t)
+      else if (!t && cur) hide()
+    }
+    document.addEventListener('mouseover', over, { passive: true })
+    document.addEventListener('focusin', over)
+    document.addEventListener('focusout', hide)
+    window.addEventListener('scroll', hide, { passive: true, capture: true })
+    return () => {
+      document.removeEventListener('mouseover', over)
+      document.removeEventListener('focusin', over)
+      document.removeEventListener('focusout', hide)
+      window.removeEventListener('scroll', hide, { capture: true })
+    }
+  }, [])
+  return createPortal(<div ref={ref} role="tooltip" className="tip-layer glass-float" data-on="0" />, document.body)
 }
 
 export type Tone = 'neutral' | 'accent' | 'warn' | 'alarm' | 'ok' | 'muted'

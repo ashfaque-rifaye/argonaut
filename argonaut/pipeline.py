@@ -18,6 +18,7 @@ from .dsp import identify, modal, severity, spectral
 from .dsp import kinematics as KIN
 from .dsp.motion import Region, measure_regions, read_video
 from .models import client as mc
+from .actions import Actions
 from .optimize import Twin, optimise
 
 RUNS = Path(__file__).resolve().parent.parent / "data" / "runs"
@@ -66,6 +67,7 @@ class Session:
         self.kin_override: dict = {}   # what-if assumptions set by the agent or the operator
         self.speed_post: dict | None = None
         self.plant = None  # optional VFD client (simulator)
+        self.actions = Actions(self)
 
     # ---------------------------------------------------------------- events
     def subscribe(self, fn):
@@ -552,6 +554,32 @@ class Session:
             ov["source"] = "what-if (Muse Wonder)"
             return await self.kinematic_inference(override=ov)
 
+        async def propose_action(args):
+            kind = args.get("kind")
+            i = self.ident
+            params = {}
+            if kind == "skip_bands":
+                bands = (self.proposal or {}).get("exclusion_bands_rpm") or getattr(self, "_last_opt", {}).get("exclusion_bands_rpm")
+                if not bands:
+                    r = optimise(self.twin)
+                    bands = r.get("exclusion_bands_rpm")
+                if not bands:
+                    return {"error": "no resonance bands identified: nothing to program"}
+                params = {"bands_rpm": bands[:3]}
+            elif kind == "balance":
+                params = {"grade": 6.3, "rotor_kg": 25.0, "radius_mm": 120.0}
+            elif kind == "work_order":
+                params = {"fault_id": args.get("fault_id"), "summary": args.get("summary")}
+            elif kind not in ("impact", "followup"):
+                return {"error": f"unknown action kind {kind}"}
+            a = await self.actions.propose(kind, args.get("title") or kind, args.get("rationale", ""), params,
+                                           proposer=mc.OPEN_WEIGHTS if private else mc.WONDER)
+            return {"action_id": a["id"], "status": a["status"],
+                    "note": ("waiting for operator approval" if a["status"] == "proposed" else
+                             "no drive connected: include the procedure in a work order instead" if a["status"] == "needs_drive"
+                             else a["status"]),
+                    "result": a.get("result")}
+
         async def propose_setpoint(args):
             r = getattr(self, "_last_opt", None) or optimise(self.twin)
             return await self._emit_proposal(r, args.get("rationale", ""), mc.OPEN_WEIGHTS if private else mc.WONDER)
@@ -559,7 +587,8 @@ class Session:
         try:
             await agent.run({"get_identification": get_identification, "run_optimiser": run_optimiser,
                              "report_diagnosis": report_diagnosis, "propose_setpoint": propose_setpoint,
-                             "test_kinematic_hypothesis": test_kinematic_hypothesis},
+                             "test_kinematic_hypothesis": test_kinematic_hypothesis,
+                             "propose_action": propose_action},
                             self.emit, private=private, ledger=ledger)
         except Exception as e:
             await self.emit({"type": "error", "message": f"agent failed: {e}"})
@@ -614,6 +643,26 @@ class Session:
                                  "summary": f"Fault posterior {h['p']:.2f} (prior {h['prior']:.2f}). Evidence: {ev}.",
                                  "evidence": [], "confidence": h["p"], "model": "rules"})
         await self._emit_proposal(optimise(self.twin), "Deterministic optimiser (no LLM).", "rules")
+        await self.plan_actions_rules()
+
+    async def plan_actions_rules(self):
+        """Deterministic action plan (no LLM): what a reliability engineer would queue for this evidence."""
+        i = self.ident
+        faults = [h for h in (i.get("kinematics") or {}).get("fault_posterior", []) if h["evaluable"]]
+        top = faults[0] if faults else None
+        if top and top["p"] >= 0.4:
+            await self.actions.propose("work_order", f"Work order: {top['title']}", "Highest fault posterior.",
+                                       {"fault_id": top["id"]})
+            if top["id"] == "imbalance":
+                await self.actions.propose("balance", "Field-balance the rotor", "1x-dominant vibration.",
+                                           {"grade": 6.3, "rotor_kg": 25.0, "radius_mm": 120.0})
+        bands = (self.proposal or {}).get("exclusion_bands_rpm")
+        if bands:
+            await self.actions.propose("skip_bands", "Lock the drive out of resonance bands",
+                                       "Campbell / optimiser exclusion bands.", {"bands_rpm": bands[:3]})
+        if self.proposal:
+            await self.actions.propose("impact", "Annual energy and cost impact", "Proposed setpoint.", {})
+        await self.actions.propose("followup", "Schedule the re-measurement", "Severity and fault posterior.", {})
 
     # ---------------------------------------------------------------- approval + closed-loop verification
     async def approve(self, proposal_id: str, approved: bool):

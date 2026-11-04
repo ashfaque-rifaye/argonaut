@@ -18,6 +18,10 @@ from __future__ import annotations
 import os
 
 from argonaut.sim.plant import (
+    HR_BAL_ANGLE_DEG,
+    HR_BAL_CMD,
+    HR_BAL_MASS_CG,
+    HR_SKIP_BASE,
     HR_RAMP_RPM_S,
     HR_SPEED_SETPOINT_RPM,
     HR_THROTTLE_PERMILLE,
@@ -98,6 +102,39 @@ def write_ramp(rpm_per_s: float, host: str | None = None, port: int | None = Non
 def write_throttle(fraction: float, host: str | None = None, port: int | None = None, timeout: float = 2.0) -> float:
     """Suction valve closure 0 (open) .. 0.95. Returns the accepted value."""
     return _write(HR_THROTTLE_PERMILLE, max(0, round(fraction * 1000)), host, port, timeout) / 1000.0
+
+
+def fit_mass(grams: float, deg: float, host: str | None = None, port: int | None = None, timeout: float = 2.0) -> None:
+    """Fit a balancing mass (grams at the plane radius, degrees from the keyphasor mark)."""
+    _write(HR_BAL_MASS_CG, max(0, round(grams * 100)), host, port, timeout)
+    _write(HR_BAL_ANGLE_DEG, round(deg) % 360, host, port, timeout)
+    _write(HR_BAL_CMD, 1, host, port, timeout)
+
+
+def remove_last_mass(host: str | None = None, port: int | None = None, timeout: float = 2.0) -> None:
+    _write(HR_BAL_CMD, 2, host, port, timeout)
+
+
+def write_skip_bands(bands: list[tuple[float, float]], host: str | None = None, port: int | None = None,
+                     timeout: float = 2.0) -> list[tuple[int, int]]:
+    """Program up to 3 VFD skip-frequency bands (centre rpm, half-width rpm); returns the read-back."""
+    bands = (list(bands) + [(0, 0)] * 3)[:3]
+    for b, (c, hw) in enumerate(bands):
+        _write(HR_SKIP_BASE + 2 * b, max(0, round(c)), host, port, timeout)
+        _write(HR_SKIP_BASE + 2 * b + 1, max(0, round(hw)), host, port, timeout)
+    return read_skip_bands(host, port, timeout)
+
+
+def read_skip_bands(host: str | None = None, port: int | None = None, timeout: float = 2.0) -> list[tuple[int, int]]:
+    from pymodbus.client import ModbusTcpClient
+
+    h, p = _addr(host, port)
+    with ModbusTcpClient(h, port=p, timeout=timeout, retries=1) as c:
+        if not c.connect():
+            raise ConnectionError(f"cannot connect to VFD at {h}:{p}")
+        hr = _check(c.read_holding_registers(HR_SKIP_BASE, count=6, device_id=DEVICE_ID), "read skip bands")
+    r = list(hr.registers)
+    return [(r[2 * b], r[2 * b + 1]) for b in range(3) if r[2 * b + 1] > 0]
 
 
 # ---------------------------------------------------------------- async ------------------------

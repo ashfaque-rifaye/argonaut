@@ -66,7 +66,7 @@ export function fmtDuration(s?: number | null) {
 /** Start a library clip. Live: POST /play on this session. Mock / replay: reopen the console live with ?clip. */
 export async function startPlay(clip: LibraryClip, mode: PlayMode) {
   const st = useStore.getState()
-  st.set({ sourceOpen: false })
+  st.set({ sourceOpen: false, welcomeOpen: false })
   if (st.mode !== 'live' || !st.sessionId) {
     const q = new URLSearchParams({ clip: clip.id, mode })
     const asset = new URLSearchParams(location.search).get('asset')
@@ -123,7 +123,7 @@ export function replay() {
 
 export function chooseWebcam() {
   const st = useStore.getState()
-  st.set({ sourceOpen: false, videoSource: 'webcam', nowPlaying: null })
+  st.set({ sourceOpen: false, welcomeOpen: false, videoSource: 'webcam', nowPlaying: null })
 }
 
 export function chooseSim() {
@@ -134,7 +134,7 @@ export function chooseSim() {
 export async function chooseFile(f: File) {
   const st = useStore.getState()
   if (st.localClip) URL.revokeObjectURL(st.localClip.url)
-  st.set({ sourceOpen: false, videoSource: 'clip', nowPlaying: null, localClip: { url: URL.createObjectURL(f), name: f.name } })
+  st.set({ sourceOpen: false, welcomeOpen: false, videoSource: 'clip', nowPlaying: null, mediaKind: 'video', localClip: { url: URL.createObjectURL(f), name: f.name } })
   try {
     const r = await link.uploadClip(f)
     if (r) useStore.getState().pushConsole({ kind: 'system', text: `Clip uploaded · ${r.width}×${r.height} @ ${r.fps.toFixed(0)} fps · ${r.duration_s.toFixed(1)} s` })

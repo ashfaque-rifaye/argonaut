@@ -25,6 +25,13 @@ Workflow:
    operation -> resonance (critical speed); high-frequency impulsive noise + cavitation index -> cavitation.
 3. If the asset is variable-speed, call run_optimiser and then propose_setpoint with the result and a
    short engineering rationale (resonance margin, duty, specific energy, NPSH). A human must approve.
+4. ACT - do not stop at a diagnosis. Call propose_action for what fixes the problem:
+   - "balance": imbalance with P >= 0.5 (influence-coefficient field balance, verified against ISO 21940-11);
+   - "skip_bands": resonance bands exist in the speed range (programs the drive's skip frequencies);
+   - "work_order": for the leading fault (pass fault_id and a 2-3 sentence summary for the technician);
+   - "impact": after a setpoint proposal (annual kWh, cost, CO2); "followup": always, last.
+   Physical actions wait for the operator's approval; without a connected drive they become work-order
+   steps. Propose only what the evidence supports, and say why in rationale.
 Kinematics: get_identification includes `kinematics` - the machine model Muse Spark read (class, stroke,
 blades, poles, display rpm), a Bayesian speed posterior (modes with probabilities, prior used, peaks
 explained) and a fault posterior (P per hypothesis with evidence in decibans; `evaluable: false` means
@@ -58,6 +65,16 @@ TOOLS = [
          "blades": {"type": "integer"}, "cylinders": {"type": "integer"}, "stroke": {"type": "integer"},
          "poles": {"type": "integer"}, "line_hz": {"type": "number"}, "revert": {"type": "boolean"}},
          "required": []}},
+    {"type": "function", "name": "propose_action",
+     "description": "Queue a corrective action for the operator: balance (field balancing on the drive), skip_bands "
+                    "(program VFD skip frequencies over resonance bands), work_order (CMMS work order for a fault), "
+                    "impact (annual energy/cost/CO2 of the setpoint proposal), followup (re-measurement date).",
+     "parameters": {"type": "object", "properties": {
+         "kind": {"type": "string", "enum": ["balance", "skip_bands", "work_order", "impact", "followup"]},
+         "title": {"type": "string"}, "rationale": {"type": "string"},
+         "fault_id": {"type": "string", "description": "work_order: fault hypothesis id, e.g. imbalance"},
+         "summary": {"type": "string", "description": "work_order: what the technician needs to know"}},
+         "required": ["kind", "title", "rationale"]}},
     {"type": "function", "name": "report_diagnosis",
      "description": "Publish one finding to the operator with evidence.",
      "parameters": {"type": "object", "properties": {
@@ -75,7 +92,7 @@ ToolFn = Callable[[dict], Awaitable[Any]]
 
 
 async def run(tools: dict[str, ToolFn], emit: Emit, user_msg: str = "Assess this asset and optimise it.",
-              max_turns: int = 8, private: bool = False, ledger=None) -> str:
+              max_turns: int = 12, private: bool = False, ledger=None) -> str:
     """Agent loop. `tools` maps tool name -> async fn(args) -> JSON-serialisable result.
 
     Every tool result is recorded in a provenance ledger; every number in the agent's text is

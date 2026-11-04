@@ -349,3 +349,79 @@ svg .ov-fade { transform: none; }
   .skeleton, .skeleton-svg, .live-tick, .panel-focus, .mask-in, .chip-in { animation: none !important; }
   .mask-in { stroke-dasharray: none; }
 }
+
+/* ───────────── v6 · glass control room ─────────────
+   Panels are translucent sheets over a static, softly lit backdrop (no backdrop-filter on panels:
+   their charts redraw at 10 Hz and must not force a re-blur). Real blur only on floating layers. */
+:root {
+  --glass-bg: color-mix(in srgb, var(--color-bg-1) 74%, transparent);
+  --glass-head: color-mix(in srgb, var(--color-bg-1) 40%, transparent);
+  --glass-border: color-mix(in srgb, #ffffff 8%, transparent);
+  --glass-hi: inset 0 1px 0 color-mix(in srgb, #ffffff 5%, transparent);
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+  --glass-float: color-mix(in srgb, var(--color-bg-1) 62%, transparent);
+  --backdrop:
+    radial-gradient(1100px 620px at 8% -12%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 62%),
+    radial-gradient(900px 560px at 104% 4%, rgba(45, 212, 191, 0.08), transparent 58%),
+    radial-gradient(1000px 700px at 60% 118%, rgba(99, 102, 241, 0.09), transparent 60%),
+    var(--color-bg-0);
+}
+:root[data-theme="light"] {
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-head: rgba(255, 255, 255, 0.35);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 14px 34px -18px rgba(15, 23, 42, 0.28);
+  --glass-float: rgba(255, 255, 255, 0.62);
+  --backdrop:
+    radial-gradient(1100px 620px at 6% -14%, rgba(101, 80, 224, 0.16), transparent 62%),
+    radial-gradient(900px 560px at 104% 2%, rgba(20, 184, 166, 0.12), transparent 58%),
+    radial-gradient(1000px 700px at 60% 120%, rgba(99, 102, 241, 0.1), transparent 60%),
+    #e8ecf1;
+}
+.console-bg { background: var(--backdrop); background-attachment: fixed; }
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+  border-radius: 14px;
+}
+.glass-float {
+  background: var(--glass-float);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-hi), 0 24px 60px -24px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+}
+.glass-head { background: var(--glass-head); }
+
+/* global tooltip (one element for the whole app, positioned on hover/focus of [data-tip]) */
+.tip-layer {
+  position: fixed;
+  z-index: 80;
+  max-width: 300px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--color-fg-1);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.tip-layer[data-on="1"] { opacity: 1; transform: none; }
+.tip-layer b { color: var(--color-fg-1); font-weight: 600; }
+
+/* onboarding spotlight */
+.tour-hole {
+  position: fixed;
+  z-index: 70;
+  border-radius: 16px;
+  box-shadow: 0 0 0 9999px rgba(3, 5, 10, 0.62), 0 0 0 2px var(--color-accent);
+  transition: all 260ms var(--ease-out-soft);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole, .tip-layer { transition: none; }
+}

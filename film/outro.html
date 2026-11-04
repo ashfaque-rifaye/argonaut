@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Argonaut outro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=block" rel="stylesheet" />
+<style>
+  :root { --violet: #9d8cff; --violet2: #c3b8ff; --cream: #f1ede4; --orange: #ff5b35; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #050608; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  .layer { position: absolute; inset: 0; opacity: 0; }
+  .big { font-family: Anton, Impact, sans-serif; text-transform: uppercase; line-height: .88; }
+  .word { display: inline-block; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  .grain { position: absolute; inset: -50%; pointer-events: none; opacity: .07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  .win { position: absolute; border-radius: 18px; overflow: hidden; background: #0d0f12; box-shadow: 0 40px 120px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08); }
+  .win .bar { height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 18px; background: #15181d; }
+  .win .bar i { width: 13px; height: 13px; border-radius: 50%; display: block; }
+  .win img { display: block; width: 100%; }
+  .stat { position: absolute; width: 760px; }
+  .stat .v { font-family: Anton, Impact, sans-serif; font-size: 190px; line-height: .9; color: #fff; }
+  .stat .l { margin-top: 14px; font: 500 30px Inter; color: rgba(255,255,255,.72); line-height: 1.3; }
+  .stat .s { margin-top: 8px; font: 500 18px "JetBrains Mono", monospace; color: rgba(255,255,255,.42); letter-spacing: .06em; text-transform: uppercase; }
+  .hl { position: absolute; border: 4px solid var(--violet); border-radius: 18px; box-shadow: 0 0 0 9999px rgba(3,4,8,.45); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="A" style="background:var(--cream)">
+    <div class="big" style="position:absolute;left:0;right:0;top:340px;text-align:center;font-size:330px;color:#0b0c10"><span class="word" id="A1">Less guesswork.</span></div>
+  </div>
+  <div class="layer" id="B" style="background:#0b0c10">
+    <div class="grain"></div>
+    <div class="big" style="position:absolute;left:0;right:0;top:340px;text-align:center;font-size:330px;color:#fff"><span class="word" id="B1">More <span style="color:var(--violet)">uptime.</span></span></div>
+  </div>
+
+  <div class="layer" id="C" style="background:radial-gradient(1200px 700px at 30% 0%,rgba(157,140,255,.22),transparent 60%),#06070a">
+    <div class="win" id="Cwin" style="left:150px;top:150px;width:1620px">
+      <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="mono" style="margin-left:18px;font-size:16px;color:rgba(255,255,255,.45)">localhost:5173/console · Argonaut control room</span></div>
+      <img src="assets/console-dark.png" />
+    </div>
+    <div class="hl" id="Chl"></div>
+    <div id="Ccap" style="position:absolute;left:0;right:0;bottom:44px;text-align:center"><span style="display:inline-block;padding:14px 26px;border-radius:16px;background:rgba(6,7,10,.78);font:600 44px Inter;color:#fff"></span></div>
+  </div>
+
+  <div class="layer" id="D" style="background:#06070a">
+    <div class="grain"></div>
+    <div class="stat" id="S1" style="left:150px;top:130px"><div class="v" id="V1"></div><div class="l">speed from the microphone vs the generator's own display</div><div class="s">real genset · Muse Spark kinematics + Bayesian posterior</div></div>
+    <div class="stat" id="S2" style="left:1010px;top:130px"><div class="v" id="V2"></div><div class="l">1× vibration after the agent field-balanced the rotor</div><div class="s">simulated drive · ISO 21940-11 G6.3 pass</div></div>
+    <div class="stat" id="S3" style="left:150px;top:590px"><div class="v" id="V3"></div><div class="l">faults identified on ground-truth clips</div><div class="s">misalignment · cavitation · imbalance · resonance</div></div>
+    <div class="stat" id="S4" style="left:1010px;top:590px"><div class="v" id="V4"></div><div class="l">of the numbers the agent wrote, traced to measurements</div><div class="s">numeric provenance · 109 of 111 in the recorded run</div></div>
+  </div>
+
+  <div class="layer" id="E" style="background:#050608">
+    <div class="grain"></div>
+    <div style="position:absolute;left:50%;top:46%;width:1500px;height:900px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(157,140,255,.25),transparent)"></div>
+    <div class="big" id="E1" style="position:absolute;left:0;right:0;top:250px;text-align:center;font-size:260px;color:#fff;letter-spacing:.06em">Argonaut</div>
+    <div id="E2" style="position:absolute;left:0;right:0;top:540px;text-align:center;font:600 46px Inter;color:#fff">Point a camera at a machine. Get it diagnosed, <span style="color:var(--violet2)">and fixed.</span></div>
+    <div id="E3" class="mono" style="position:absolute;left:0;right:0;top:650px;text-align:center;font-size:30px;color:rgba(255,255,255,.8)">github.com/ashfaque-rifaye/argonaut</div>
+    <div id="E4" class="mono" style="position:absolute;left:0;right:0;top:740px;text-align:center;font-size:20px;letter-spacing:.2em;color:rgba(255,255,255,.5)">BUILT ON META MUSE SPARK · MUSE WONDER · SAM 3.1 · META GLOBAL AI DEVELOPER HACKATHON 2026</div>
+    <div id="E5" class="mono" style="position:absolute;left:0;right:0;bottom:40px;text-align:center;font-size:14px;color:rgba(255,255,255,.35)">Footage CC BY 3.0: NXDATA · Engine master · Agro Air Dynamics · WasherHome2009 · Numatic Plants · Dynelec. Tacoma Narrows film: public domain.</div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id)
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+const lin = (t, a, b) => clamp((t - a) / (b - a))
+const easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+const expo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x))
+function vis(id, t, a, b, fi = 0.15, fo = 0.15) {
+  $(id).style.opacity = t < a || t > b ? 0 : clamp(Math.min(lin(t, a, a + fi), 1 - lin(t, b - fo, b)))
+  return t >= a && t <= b
+}
+function rise(id, t, a, dur = 0.45, dist = 80) {
+  const x = expo(lin(t, a, a + dur))
+  $(id).style.opacity = x
+  $(id).style.transform = `translateY(${(1 - x) * dist}px)`
+}
+const DUR = 14.5
+// focus boxes on the console screenshot (in screenshot pixels, 1920x1080, scaled to the 1620-wide window)
+const K = 1620 / 1920
+const FOCUS = [
+  [3.4, 5.3, 1484, 186, 422, 336, 'Agents that act: balance the rotor, write the work order.'],
+  [5.3, 7.0, 8, 184, 712, 470, 'SAM 3.1 sensors on the footage, shake-cancelled.'],
+  [7.0, 8.6, 1106, 712, 368, 360, 'Muse Spark + Bayes: a probability for every fault.'],
+]
+function render(t) {
+  if (vis('A', t, 0, 1.7, 0.01, 0.12)) rise('A1', t, 0.05, 0.4, 120)
+  if (vis('B', t, 1.6, 3.25, 0.05, 0.15)) rise('B1', t, 1.65, 0.4, 120)
+  if (vis('C', t, 3.15, 8.75)) {
+    // camera: start on the whole console, then fly into each focus panel so the UI is legible on video
+    const win = $('Cwin')
+    const k = FOCUS.findIndex((F) => t >= F[0] && t < F[1])
+    const i = k < 0 ? FOCUS.length - 1 : k
+    const f = FOCUS[i]
+    const prev = i > 0 ? FOCUS[i - 1] : null
+    const cam = (F) => {
+      if (!F) return { s: 1, x: 0, y: 0 }
+      const [, , x, y, w, h] = F
+      const sc = Math.min(2.1, 1500 / (w * K), 860 / (h * K))
+      const cx = 150 + x * K + (w * K) / 2
+      const cy = 150 + 44 + y * K + (h * K) / 2
+      return { s: sc, x: 960 - cx * sc, y: 520 - cy * sc }
+    }
+    const a = cam(prev)
+    const b = cam(f)
+    const m = easeIO(lin(t, f[0], f[0] + 0.7))
+    const s = a.s + (b.s - a.s) * m
+    const tx = a.x + (b.x - a.x) * m
+    const ty = a.y + (b.y - a.y) * m
+    win.style.transformOrigin = '0 0'
+    win.style.transform = `translate(${tx}px, ${ty + (1 - expo(lin(t, 3.15, 3.8))) * 140}px) scale(${s})`
+    $('Chl').style.opacity = 0
+    $('Ccap').firstElementChild.textContent = f[6]
+    $('Ccap').style.opacity = lin(t, f[0] + 0.35, f[0] + 0.6)
+  }
+  if (vis('D', t, 8.65, 11.6)) {
+    const c = (a) => easeIO(lin(t, a, a + 0.9))
+    $('V1').textContent = '+' + (0.03 * c(8.8)).toFixed(2) + '%'
+    $('V2').textContent = '−' + Math.round(84 * c(9.05)) + '%'
+    $('V3').textContent = Math.round(6 * c(9.3)) + '/6'
+    $('V4').textContent = Math.round(98 * c(9.55)) + '%'
+    rise('S1', t, 8.75); rise('S2', t, 9.0); rise('S3', t, 9.25); rise('S4', t, 9.5)
+  }
+  if (vis('E', t, 11.5, DUR + 1, 0.2, 0.01)) {
+    rise('E1', t, 11.6, 0.5, 60); rise('E2', t, 12.0); rise('E3', t, 12.35, 0.5, 30); rise('E4', t, 12.6, 0.5, 20); rise('E5', t, 12.9, 0.5, 10)
+  }
+}
+window.render = render
+window.DURATION = DUR
+render(0)
+</script>
+</body>
+</html>

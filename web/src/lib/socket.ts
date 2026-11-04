@@ -51,6 +51,17 @@ export const api = {
     ),
   rtoStop: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/rto/stop`, { method: 'POST' }).then((r) => json<OkResponse>(r)),
   report: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/report`).then((r) => json<SessionReport>(r)),
+  decideAction: (id: string, aid: string, approved: boolean) =>
+    fetch(`/api/sessions/${encodeURIComponent(id)}/actions/${encodeURIComponent(aid)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved }),
+    }).then((r) => json<{ ok: boolean; error?: string }>(r)),
+  planActions: (id: string) => fetch(`/api/sessions/${encodeURIComponent(id)}/actions/plan`, { method: 'POST' }).then((r) => json<{ ok: boolean; error?: string }>(r)),
+  connectFeed: (id: string, url: string, name?: string) =>
+    fetch(`/api/sessions/${encodeURIComponent(id)}/feed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name }) }).then((r) =>
+      json<{ ok: boolean; error?: string }>(r),
+    ),
 }
 
 /* ───────────────────────── WebSocket ───────────────────────── */
@@ -177,6 +188,28 @@ export const link = {
       useStore.getState().pushConsole({ kind: 'error', text: `Stop failed: ${(e as Error).message}` })
     }
   },
+  async decideAction(aid: string, approved: boolean) {
+    const st = useStore.getState()
+    if (!st.sessionId || st.mode !== 'live') return
+    const r = await api.decideAction(st.sessionId, aid, approved)
+    if (!r.ok) useStore.getState().pushConsole({ kind: 'error', text: `Action: ${r.error ?? 'failed'}` })
+    else useStore.getState().pushConsole({ kind: 'system', text: `You ${approved ? 'approved' : 'rejected'} an agent action`, level: approved ? 'approved' : 'rejected' })
+  },
+  async planActions() {
+    const st = useStore.getState()
+    if (!st.sessionId || st.mode !== 'live') return
+    const r = await api.planActions(st.sessionId)
+    if (!r.ok) useStore.getState().pushConsole({ kind: 'error', text: r.error ?? 'Could not plan actions' })
+  },
+  async connectFeed(url: string, name?: string) {
+    const st = useStore.getState()
+    if (!st.sessionId || st.mode !== 'live') throw new Error('Live feeds need the backend (not available in a replay)')
+    st.resetAnalysis()
+    st.set({ videoSource: 'clip', nowPlaying: null, localClip: null, welcomeOpen: false })
+    const r = await api.connectFeed(st.sessionId, url, name)
+    if (!r.ok) throw new Error(r.error ?? 'Could not open the stream')
+    useStore.getState().pushConsole({ kind: 'system', text: `Live feed connected: ${name || url}` })
+  },
   async uploadClip(file: File) {
     const id = useStore.getState().sessionId
     if (!id || mock) return null
@@ -229,7 +262,7 @@ export async function bootstrap() {
   if (booted) return
   booted = true
   const q = new URLSearchParams(location.search)
-  const asset = q.get('asset') ?? 'Fan F-101'
+  const asset = q.get('asset') ?? (q.get('mock') === '1' ? 'Fan F-101' : 'No source yet')
   useStore.getState().set({ assetName: asset })
 
   if (q.get('mock') === '1') {
@@ -240,7 +273,7 @@ export async function bootstrap() {
   const replay = q.get('replay')
   if (replay) {
     useStore.getState().set({ mode: 'replay', sessionId: replay, startedAt: Date.now(), videoSource: 'clip' })
-    socket = new Socket(`/ws/replay/${encodeURIComponent(replay)}`)
+    socket = new Socket(`/ws/replay/${encodeURIComponent(replay)}${q.get('speed') ? `?speed=${encodeURIComponent(q.get('speed')!)}` : ''}`)
     void loadLibrary() // credits for a replayed library clip
     return
   }
@@ -259,7 +292,10 @@ export async function bootstrap() {
   }
   useStore.getState().set({ mode: 'live', sessionId, startedAt: Date.now(), videoSource: 'clip' })
   socket = new Socket(`/ws/${encodeURIComponent(sessionId)}`)
-  // real by default: a fresh live session plays the featured real clip (or ?clip=<id>&mode=…)
-  if (!joined) void autoStart(q)
-  else void loadLibrary()
+  // a fresh session opens on the welcome sheet (choose: sample, upload, live feed); ?clip=<id> plays directly
+  if (!joined && q.get('clip')) void autoStart(q)
+  else {
+    void loadLibrary()
+    if (!joined) useStore.getState().set({ welcomeOpen: true, videoSource: 'clip' })
+  }
 }

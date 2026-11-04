@@ -134,6 +134,41 @@ async def stop_rto(sid: str):
     return {"ok": True}
 
 
+class ActionDecision(BaseModel):
+    approved: bool
+    note: str | None = None
+
+
+@app.post("/api/sessions/{sid}/actions/plan")
+async def plan_actions(sid: str):
+    """Queue the deterministic action plan for the current identification (no LLM needed)."""
+    s = SESSIONS[sid]
+    if not s.ident:
+        return {"ok": False, "error": "identify the machine first"}
+    if s.plant is None:
+        s.plant = await asyncio.to_thread(_plant_client)
+    await s.plan_actions_rules()
+    return {"ok": True}
+
+
+@app.post("/api/sessions/{sid}/actions/{aid}")
+async def decide_action(sid: str, aid: str, body: ActionDecision):
+    """Operator approves or rejects a proposed agent action (balance, skip bands, ...)."""
+    s = SESSIONS[sid]
+    return await s.actions.approve(aid, body.approved, body.note)
+
+
+@app.get("/api/sessions/{sid}/actions/{aid}/workorder.md")
+async def work_order_file(sid: str, aid: str):
+    from fastapi.responses import PlainTextResponse
+    a = SESSIONS[sid].actions.items.get(aid) or {}
+    md = (a.get("result") or {}).get("markdown")
+    if not md:
+        return PlainTextResponse("no work order", status_code=404)
+    return PlainTextResponse(md, media_type="text/markdown",
+                             headers={"Content-Disposition": f'attachment; filename="{a["result"]["work_order"]["number"]}.md"'})
+
+
 @app.get("/api/sessions/{sid}/report")
 async def report(sid: str):
     s = SESSIONS[sid]
@@ -253,6 +288,82 @@ async def _stream_file(s: Session, sid: str, path: str, clip: dict, cam_fps: flo
         cap.release()
     await s.emit({"type": "coach", "level": "ok", "clip_end": True,
                   "text": f"End of clip: {clip['title']}. Choose another source or run Identify."})
+
+
+FEED_JPEG: dict[str, bytes] = {}
+
+
+class Feed(BaseModel):
+    url: str
+    name: str | None = None
+
+
+@app.post("/api/sessions/{sid}/feed")
+async def connect_feed(sid: str, body: Feed):
+    """Connect a live camera feed (RTSP / HTTP(S) / HLS stream, or a camera index) and run it through the
+    live engine. The browser shows it as MJPEG from /api/sessions/{sid}/feed.mjpg (it cannot play RTSP)."""
+    import cv2
+
+    s = SESSIONS.get(sid) or SESSIONS.setdefault(sid, Session(sid, "Asset"))
+    src = int(body.url) if body.url.strip().isdigit() else body.url.strip()
+    cap = await asyncio.to_thread(cv2.VideoCapture, src)
+    ok = await asyncio.to_thread(cap.isOpened)
+    if not ok:
+        return {"ok": False, "error": "could not open the stream (check the URL, credentials and that it is reachable from the server)"}
+    old = TASKS.get(sid)
+    if old and not old.done():
+        old.cancel()
+    s.asset_name = body.name or "Live feed"
+    TASKS[sid] = asyncio.create_task(_guard(s, _stream_feed(s, sid, cap, body.name or str(body.url))))
+    return {"ok": True}
+
+
+async def _stream_feed(s: Session, sid: str, cap, name: str):
+    import time as _t
+
+    import cv2
+    w, h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    await s.emit({"type": "media", "url": f"/api/sessions/{sid}/feed.mjpg", "kind": "mjpeg", "width": w, "height": h,
+                  "fps": fps, "clip_id": None, "mode": "stream", "title": name})
+    eng = LIVE[sid] = LiveEngine(s)
+    t0, n, last_jpg = _t.perf_counter(), 0, 0.0
+    try:
+        while True:
+            ok, fr = await asyncio.to_thread(cap.read)
+            if not ok:
+                break
+            t = _t.perf_counter() - t0
+            await eng.push_image(t, fr)
+            if t - last_jpg >= 0.08:  # ~12 fps preview for the browser
+                ok2, buf = cv2.imencode(".jpg", fr, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                if ok2:
+                    FEED_JPEG[sid] = buf.tobytes()
+                last_jpg = t
+            n += 1
+            await asyncio.sleep(0)
+    finally:
+        cap.release()
+    await s.emit({"type": "coach", "level": "warn", "clip_end": True, "text": f"Live feed ended after {n} frames: {name}."})
+
+
+@app.get("/api/sessions/{sid}/feed.mjpg")
+async def feed_mjpeg(sid: str):
+    from fastapi.responses import StreamingResponse
+
+    async def gen():
+        last = None
+        while True:
+            jpg = FEED_JPEG.get(sid)
+            if jpg is not None and jpg is not last:
+                last = jpg
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
+            t = TASKS.get(sid)
+            if t is not None and t.done() and jpg is last:
+                break
+            await asyncio.sleep(0.05)
+
+    return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.get("/api/runs")

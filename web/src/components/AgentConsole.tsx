@@ -5,14 +5,38 @@ import { link } from '../lib/socket'
 import type { AgentClaim, DiagnosisEvent, Evidence } from '../lib/protocol'
 import { cx, Panel, StatusDot, Tip } from './ui'
 
+/** Light Markdown for agent prose: "## heading" lines and **bold**; stray markers are dropped. Applied only to
+ *  the plain segments between provenance claims, so claim offsets (into the raw text) stay valid. */
+function md(seg: string, key: string | number): React.ReactNode {
+  const lines = seg.split('\n')
+  return lines.map((line, li) => {
+    const h = /^\s*#{1,4}\s+(.*)$/.exec(line)
+    const body = (h ? h[1] : line).split(/(\*\*[^*]+\*\*)/g).map((part, pi) =>
+      /^\*\*[^*]+\*\*$/.test(part) ? (
+        <strong key={pi} className="font-semibold text-fg-1">
+          {part.slice(2, -2)}
+        </strong>
+      ) : (
+        part.replace(/\*\*/g, '')
+      ),
+    )
+    return (
+      <span key={`${key}-${li}`}>
+        {li > 0 && '\n'}
+        {h ? <strong className="font-semibold text-fg-1">{body}</strong> : body}
+      </span>
+    )
+  })
+}
+
 /** Agent text with numeric provenance: verified numbers reveal their source on hover, unverified ones are flagged. */
 function ClaimText({ text, claims }: { text: string; claims?: AgentClaim[] }) {
-  if (!claims?.length) return <>{text}</>
+  if (!claims?.length) return <>{md(text, 'all')}</>
   const out: React.ReactNode[] = []
   let at = 0
   claims.forEach((c, i) => {
     if (c.start < at || c.end > text.length) return
-    if (c.start > at) out.push(text.slice(at, c.start))
+    if (c.start > at) out.push(md(text.slice(at, c.start), `s${i}`))
     const slice = text.slice(c.start, c.end)
     out.push(
       c.verified ? (
@@ -50,7 +74,7 @@ function ClaimText({ text, claims }: { text: string; claims?: AgentClaim[] }) {
     )
     at = c.end
   })
-  if (at < text.length) out.push(text.slice(at))
+  if (at < text.length) out.push(md(text.slice(at), 'end'))
   return <>{out}</>
 }
 

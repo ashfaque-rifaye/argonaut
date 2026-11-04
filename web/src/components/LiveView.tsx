@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Anchor, Camera, ChevronDown, ExternalLink, Film, FlaskConical, Layers, RotateCcw, ScanLine, Upload } from 'lucide-react'
+import { Activity, Anchor, Camera, ChevronDown, ExternalLink, Film, FlaskConical, Layers, Maximize2, Minimize2, RotateCcw, ScanLine, Upload } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { link } from '../lib/socket'
 import { startAudioStreaming, startFrameStreaming } from '../lib/capture'
@@ -47,6 +47,8 @@ export function LiveView({ compact }: { compact?: boolean }) {
   const src = useStore((s) => s.videoSource)
   const set = useStore((s) => s.set)
   const mediaUrl = useStore((s) => s.mediaUrl)
+  const mediaKind = useStore((s) => s.mediaKind)
+  const focusView = useStore((s) => s.focusView)
   const np = useStore((s) => s.nowPlaying)
   const localClip = useStore((s) => s.localClip)
   const libraryState = useStore((s) => s.libraryState)
@@ -280,6 +282,16 @@ export function LiveView({ compact }: { compact?: boolean }) {
             <ChevronDown size={11} className="text-fg-4" />
           </button>
           <button
+            type="button"
+            onClick={() => set({ focusView: !focusView })}
+            data-tip={focusView ? 'Back to the normal layout' : 'Enlarge the footage'}
+            aria-label={focusView ? 'Shrink footage' : 'Enlarge footage'}
+            aria-pressed={focusView}
+            className="ml-1 inline-flex h-6 w-7 items-center justify-center rounded-md border border-line-2 bg-bg-2 text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg-1"
+          >
+            {focusView ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </button>
+          <button
             onClick={toggleOds}
             title="Operating deflection shape: exaggerated motion at a chosen frequency"
             className={cx(
@@ -301,7 +313,10 @@ export function LiveView({ compact }: { compact?: boolean }) {
         {/* the simulated rig exists only in the simulator */}
         {src === 'sim' && mode === 'mock' && <img src="/mock/rig.svg" alt="Simulated camera view of fan F-101 on its stand" className="absolute inset-0 h-full w-full object-contain" draggable={false} />}
         {src === 'webcam' && <video key="cam" ref={videoRef} className="absolute inset-0 h-full w-full object-contain" autoPlay muted playsInline />}
-        {src === 'clip' && clipSrc && (
+        {src === 'clip' && clipSrc && mediaKind === 'mjpeg' && !localClip && (
+          <img src={clipSrc} alt="Live camera feed" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+        )}
+        {src === 'clip' && clipSrc && (mediaKind !== 'mjpeg' || localClip) && (
           <video
             key={localClip ? localClip.url : `${clipSrc}#${np?.nonce ?? 0}`}
             ref={videoRef}

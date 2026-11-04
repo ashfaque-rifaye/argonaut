@@ -52,7 +52,25 @@ function Row({ s }: { s: StageState }) {
   )
 }
 
-export function ModelRail() {
+function Tile({ s }: { s: StageState }) {
+  const meta = STAGE_META[s.stage]
+  const running = s.state === 'running'
+  const err = s.state === 'error'
+  const lat = running ? (s.stage === 'voice' ? 'live' : '…') : s.latency_ms ? (s.latency_ms >= 1000 ? `${(s.latency_ms / 1000).toFixed(1)} s` : `${s.latency_ms} ms`) : '—'
+  return (
+    <div
+      data-tip={`<b>${meta.name}</b> · ${s.model}<br/>${s.detail || s.state}`}
+      className={cx('relative flex items-center gap-2 overflow-hidden rounded-[9px] border px-2 py-1.5', running ? 'border-accent/45 bg-[var(--accent-dim)]' : err ? 'border-alarm/40' : 'border-line-1 bg-bg-0/30')}
+    >
+      <span className={cx('shrink-0', running ? 'text-accent-2' : s.state === 'ok' ? 'text-fg-2' : 'text-fg-4')}>{STAGE_ICON[s.stage](13)}</span>
+      <span className={cx('min-w-0 flex-1 truncate text-[11px] font-medium', s.state === 'idle' ? 'text-fg-3' : 'text-fg-1')}>{meta.name}</span>
+      <span className="num text-[10.5px] text-fg-3">{lat}</span>
+      <StatusDot state={s.state} />
+    </div>
+  )
+}
+
+export function ModelRail({ compact = false }: { compact?: boolean }) {
   const pipeline = useStore((s) => s.pipeline)
   const active = PIPELINE_STAGES.filter((k) => pipeline[k].state === 'running').length
   const live = PIPELINE_STAGES.filter((k) => k !== 'dsp' && pipeline[k].state !== 'idle').length
@@ -65,11 +83,9 @@ export function ModelRail() {
           <StatusDot state={active ? 'running' : 'idle'} /> {active} running
         </span>
       }
-      bodyClass="divide-y divide-line-1"
+      bodyClass={compact ? 'grid grid-cols-2 gap-1.5 p-2' : 'divide-y divide-line-1'}
     >
-      {PIPELINE_STAGES.map((k) => (
-        <Row key={k} s={pipeline[k]} />
-      ))}
+      {PIPELINE_STAGES.map((k) => (compact ? <Tile key={k} s={pipeline[k]} /> : <Row key={k} s={pipeline[k]} />))}
     </Panel>
   )
 }

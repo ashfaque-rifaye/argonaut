@@ -492,6 +492,7 @@ export type ServerMessage =
   | CampbellEvent
   | ModalEvent
   | KinematicsEvent
+  | ActionEvent
   | AssetEvent
   | DiagnosisEvent
   | ProposalEvent
@@ -515,6 +516,53 @@ export interface MediaEvent {
   /** v3 · set when the media comes from POST /play (library clip); absent for uploads and older replays */
   clip_id?: string
   mode?: PlayMode
+  /** v6 · 'mjpeg' for a connected live feed (RTSP/HTTP relayed by the server) */
+  kind?: 'mjpeg'
+  title?: string
+}
+
+/* ───────────── v6 · agent actions (proposed → approved → running → done) ───────────── */
+export type ActionKind = 'balance' | 'skip_bands' | 'work_order' | 'impact' | 'followup' | (string & {})
+export type ActionStatus = 'proposed' | 'needs_drive' | 'running' | 'done' | 'failed' | 'rejected'
+export interface ActionStep {
+  t: number
+  text: string
+  status: 'done' | 'warn' | 'running'
+  data?: Record<string, unknown>
+}
+export interface WorkOrder {
+  number: string
+  asset: string
+  priority: string
+  due: string
+  failure_mode: { code: string; text: string; standard: string }
+  suspected_cause: string
+  probability: number
+  description: string
+  evidence: string[]
+  safety: string[]
+  tasks: string[]
+  parts: string[]
+  est_hours: number
+  verification: string
+}
+export interface ActionEvent {
+  type: 'action'
+  t?: number
+  id: string
+  kind: ActionKind
+  title: string
+  rationale: string
+  params: Record<string, unknown>
+  proposer: string
+  created: number
+  status: ActionStatus
+  requires_approval: boolean
+  steps: ActionStep[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  result: any
+  error?: string
+  note?: string
 }
 
 /* ───────────── v3 · real-footage library (GET /api/library, POST /api/sessions/{id}/play) ───────────── */

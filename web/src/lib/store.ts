@@ -13,6 +13,7 @@ import type {
   PlayMode,
   ModalEvent,
   KinematicsEvent,
+  ActionEvent,
   PipelineEvent,
   PipelineStage,
   ProposalEvent,
@@ -110,7 +111,13 @@ interface State {
   campbell: CampbellEvent | null
   modal: ModalEvent | null
   kinematics: KinematicsEvent | null
-  identifyTab: 'modes' | 'faults'
+  identifyTab: 'modes' | 'faults' | 'twin'
+  /* v6 · agents act; onboarding */
+  actions: ActionEvent[]
+  mediaKind: 'video' | 'mjpeg'
+  welcomeOpen: boolean
+  tourStep: number | null
+  focusView: boolean
   asset: AssetEvent | null
   diagnoses: DiagnosisEvent[]
   proposal: ProposalEvent | null
@@ -228,7 +235,9 @@ const initial = () => ({
   campbell: null,
   modal: null,
   kinematics: null,
-  identifyTab: 'modes' as 'modes' | 'faults',
+  identifyTab: 'modes' as 'modes' | 'faults' | 'twin',
+  actions: [] as ActionEvent[],
+  mediaKind: 'video' as 'video' | 'mjpeg',
   asset: null,
   diagnoses: [] as DiagnosisEvent[],
   proposal: null,
@@ -300,6 +309,9 @@ export const useStore = create<State>((set, get) => ({
   nowPlaying: null,
   localClip: null,
   sourceOpen: false,
+  welcomeOpen: false,
+  tourStep: null,
+  focusView: false,
   ...initial(),
 
   set: (p) => set(p),
@@ -348,6 +360,7 @@ export const useStore = create<State>((set, get) => ({
         set({
           msgCount,
           mediaUrl: m.url,
+          mediaKind: m.kind === 'mjpeg' ? 'mjpeg' : 'video',
           nowPlaying,
           // a library clip replaces a local file; an unknown URL (the server's copy of an upload) keeps it
           localClip: clip ? null : s.localClip,
@@ -385,6 +398,11 @@ export const useStore = create<State>((set, get) => ({
       case 'modal':
         set({ msgCount, modal: m })
         return
+      case 'action': {
+        const exists = s.actions.some((a) => a.id === m.id)
+        set({ msgCount, actions: exists ? s.actions.map((a) => (a.id === m.id ? m : a)) : [...s.actions, m] })
+        return
+      }
       case 'kinematics':
         // first inference of a source brings the panel forward; later what-ifs keep the operator's tab
         set({ msgCount, kinematics: m, identifyTab: s.kinematics ? s.identifyTab : 'faults' })

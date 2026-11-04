@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Argonaut intro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=block" rel="stylesheet" />
+<style>
+  :root { --violet: #9d8cff; --violet2: #c3b8ff; --ink: #0b0c10; --cream: #f1ede4; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #050608; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #050608; font-family: Inter, sans-serif; }
+  .layer { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform; }
+  .full { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .halftone::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(0,0,0,.55) 1.1px, transparent 1.6px) 0 0 / 6px 6px; mix-blend-mode: multiply; }
+  .grain { position: absolute; inset: -50%; pointer-events: none; opacity: .07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  .big { font-family: Anton, Impact, sans-serif; text-transform: uppercase; letter-spacing: .005em; line-height: .88; color: #fff; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  .tag { position: absolute; font-family: "JetBrains Mono", monospace; font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+  .word { display: inline-block; will-change: transform, opacity; }
+  .vio { color: var(--violet); }
+  .bar { position: absolute; left: 0; right: 0; height: 120px; background: #050608; }
+  .credit { position: absolute; right: 36px; bottom: 26px; font: 500 15px "JetBrains Mono", monospace; color: rgba(255,255,255,.5); letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- A · 53 % -->
+  <div class="layer" id="A" style="background:#050608">
+    <div class="grain"></div>
+    <div class="big" id="pct" style="position:absolute;left:160px;top:190px;font-size:560px">0%</div>
+    <div id="pctcap" style="position:absolute;left:176px;top:780px;font:600 54px Inter;color:#fff;letter-spacing:-.01em">of the world's electricity</div>
+  </div>
+
+  <!-- B · motors -->
+  <div class="layer halftone" id="B">
+    <img class="full" id="Bimg" src="assets/motor.jpg" style="filter:grayscale(1) contrast(1.25) brightness(.55)" />
+    <div class="big" style="position:absolute;left:150px;top:330px;font-size:250px"><span class="word" id="B1">turns</span> <span class="word" id="B2">a</span> <span class="word vio" id="B3">motor.</span></div>
+    <div class="tag" style="left:156px;top:640px" id="Bcap">IEA 4E · 2025</div>
+  </div>
+
+  <!-- C · cuts -->
+  <div class="layer" id="C">
+    <img class="full" id="C0" src="assets/genset.jpg" />
+    <img class="full" id="C1" src="assets/fan.jpg" />
+    <img class="full" id="C2" src="assets/washer.jpg" />
+    <img class="full" id="C3" src="assets/pump.jpg" />
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.65))"></div>
+    <div class="big" id="Cword" style="position:absolute;left:120px;bottom:150px;font-size:230px"></div>
+    <div class="tag" id="Ctag" style="left:126px;bottom:110px"></div>
+  </div>
+
+  <!-- D · nobody checked -->
+  <div class="layer" id="D" style="background:var(--cream)">
+    <div class="big" style="position:absolute;left:150px;top:250px;font-size:200px;color:#0b0c10">
+      <div><span class="word" id="D1">Most run at speeds</span></div>
+      <div><span class="word" id="D2" style="color:#ff5b35">nobody checked.</span></div>
+    </div>
+    <div id="Dsub" style="position:absolute;left:156px;top:740px;font:500 40px Inter;color:#3a3a3a;max-width:1300px">against their own resonances.</div>
+  </div>
+
+  <!-- E · Tacoma -->
+  <div class="layer halftone" id="E">
+    <img class="full" id="Eimg" src="assets/tacoma.jpg" style="filter:grayscale(1) contrast(1.3) brightness(.7)" />
+    <div class="big" style="position:absolute;left:140px;top:370px;font-size:190px"><span class="word" id="E1">resonance</span><br /><span class="word" id="E2">is not a theory.</span></div>
+    <div class="tag" style="left:146px;top:800px" id="Ecap">Tacoma Narrows · 7 Nov 1940</div>
+  </div>
+
+  <!-- F · eyes: SAM masks draw on the real genset frame -->
+  <div class="layer" id="F">
+    <img class="full" id="Fimg" src="assets/genset.jpg" style="filter:brightness(.72) saturate(1.05)" />
+    <svg id="masks" width="1920" height="1080" style="position:absolute;inset:0"></svg>
+    <div class="big" style="position:absolute;left:110px;top:80px;font-size:170px"><span class="word" id="F1">give it</span> <span class="word vio" id="F2">eyes.</span></div>
+    <div class="tag" style="left:116px;top:250px" id="Fcap">SAM 3.1 · virtual sensors placed by name</div>
+  </div>
+
+  <!-- G · mind: posterior -->
+  <div class="layer" id="G" style="background:#07080c">
+    <div class="grain"></div>
+    <svg width="1920" height="1080" style="position:absolute;inset:0">
+      <defs>
+        <linearGradient id="gf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9d8cff" stop-opacity=".55" /><stop offset="1" stop-color="#9d8cff" stop-opacity="0" /></linearGradient>
+      </defs>
+      <line x1="160" x2="1760" y1="820" y2="820" stroke="rgba(255,255,255,.18)" />
+      <path id="Garea" fill="url(#gf)" />
+      <path id="Gline" fill="none" stroke="#c3b8ff" stroke-width="5" />
+      <circle id="Gdot" r="12" fill="#fff" />
+    </svg>
+    <div class="big" style="position:absolute;left:160px;top:110px;font-size:170px"><span class="word" id="G1">and a</span> <span class="word vio" id="G2">mind.</span></div>
+    <div id="Glab" class="mono" style="position:absolute;font-size:40px;color:#fff;font-weight:600"></div>
+    <div class="tag" style="left:166px;top:870px" id="Gcap">Muse Spark: "4-stroke diesel genset" · Bayesian speed posterior</div>
+  </div>
+
+  <!-- H · logo -->
+  <div class="layer" id="H" style="background:#050608">
+    <div class="grain"></div>
+    <div id="Hglow" style="position:absolute;left:50%;top:50%;width:1400px;height:900px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(157,140,255,.28),transparent)"></div>
+    <div class="big" id="Hlogo" style="position:absolute;left:0;right:0;top:330px;text-align:center;font-size:300px;letter-spacing:.06em"></div>
+    <div id="Htag" style="position:absolute;left:0;right:0;top:690px;text-align:center;font:600 50px Inter;color:#fff;letter-spacing:-.01em">See it. Understand it. <span style="color:var(--violet2)">Fix it.</span></div>
+    <div id="Hmeta" class="mono" style="position:absolute;left:0;right:0;top:790px;text-align:center;font-size:22px;letter-spacing:.2em;color:rgba(255,255,255,.55)">MUSE SPARK · MUSE WONDER · SAM 3.1 · VOICE TRANSCRIBE</div>
+  </div>
+
+  <div class="credit" id="credit"></div>
+</div>
+<script src="assets/genset_masks.js"></script>
+<script>
+const $ = (id) => document.getElementById(id)
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+const lin = (t, a, b) => clamp((t - a) / (b - a))
+const easeOut = (x) => 1 - Math.pow(1 - x, 3)
+const easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+const expo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x))
+function vis(id, t, a, b, fi = 0.18, fo = 0.18) {
+  const o = clamp(Math.min(lin(t, a, a + fi), 1 - lin(t, b - fo, b)))
+  $(id).style.opacity = t < a || t > b ? 0 : o
+  return t >= a && t <= b
+}
+function rise(id, t, a, dur = 0.45, dist = 90) {
+  const x = expo(lin(t, a, a + dur))
+  const e = $(id)
+  e.style.opacity = x
+  e.style.transform = `translateY(${(1 - x) * dist}px)`
+}
+// scene timing (s)
+const T = { A: [0, 2.3], B: [2.2, 3.9], C: [3.8, 5.75], D: [5.7, 7.6], E: [7.5, 9.3], F: [9.2, 11.6], G: [11.5, 13.7], H: [13.6, 16.5] }
+const DUR = 16.5
+const CUTS = [
+  ['C0', 'Resonating.', 'Diesel genset · 1500 kVA'],
+  ['C1', 'Unbalanced.', 'Exhaust fan · 2.13 m'],
+  ['C2', 'Shaking.', 'Washer · 1400 rpm spin'],
+  ['C3', 'Unmeasured.', 'Centrifugal pump'],
+]
+const CREDITS = {
+  B: 'Footage: Dynelec · CC BY 3.0',
+  C: 'Footage: NXDATA · Agro Air Dynamics · WasherHome2009 · Numatic Plants · CC BY 3.0',
+  E: 'Film: Barney Elliott, 1940 · public domain',
+  F: 'Footage: NXDATA · CC BY 3.0',
+}
+// posterior curve (genset 1500 kVA: 750 rpm 2 %, 1498 rpm 98 %), log-x over 200..6000 rpm
+const X = (rpm) => 160 + (Math.log(rpm / 200) / Math.log(6000 / 200)) * 1600
+const gauss = (r, mu, s, a) => a * Math.exp(-0.5 * Math.pow(Math.log(r / mu) / s, 2))
+function postY(r) { return 820 - 560 * (gauss(r, 1498, 0.012, 1) + gauss(r, 750, 0.012, 0.05)) }
+
+function render(t) {
+  // A
+  if (vis('A', t, ...T.A, 0.01, 0.2)) {
+    const n = Math.round(53 * easeOut(lin(t, 0.15, 1.35)))
+    $('pct').textContent = n + '%'
+    rise('pct', t, 0.0, 0.5, 60)
+    rise('pctcap', t, 1.0, 0.5, 40)
+  }
+  // B
+  if (vis('B', t, ...T.B)) {
+    $('Bimg').style.transform = `scale(${1.06 + 0.06 * lin(t, ...T.B)})`
+    rise('B1', t, 2.3); rise('B2', t, 2.42); rise('B3', t, 2.55); rise('Bcap', t, 2.9, 0.5, 20)
+  }
+  // C · hard cuts, 0.48 s each
+  if (vis('C', t, ...T.C, 0.05, 0.1)) {
+    const k = Math.min(3, Math.floor((t - T.C[0]) / 0.48))
+    CUTS.forEach(([id], i) => {
+      $(id).style.opacity = i === k ? 1 : 0
+      $(id).style.transform = `scale(${1.04 + 0.05 * lin(t, T.C[0] + i * 0.48, T.C[0] + (i + 1) * 0.48)})`
+    })
+    $('Cword').textContent = CUTS[k][1]
+    $('Ctag').textContent = CUTS[k][2]
+    const local = (t - T.C[0]) - k * 0.48
+    const x = expo(clamp(local / 0.22))
+    $('Cword').style.transform = `translateX(${(1 - x) * -60}px)`
+    $('Cword').style.opacity = x
+  }
+  // D
+  if (vis('D', t, ...T.D, 0.08, 0.18)) { rise('D1', t, 5.8, 0.45, 110); rise('D2', t, 6.15, 0.45, 110); rise('Dsub', t, 6.6, 0.5, 30) }
+  // E
+  if (vis('E', t, ...T.E)) {
+    $('Eimg').style.transform = `scale(${1.12 - 0.07 * lin(t, ...T.E)}) translateY(${-10 * lin(t, ...T.E)}px)`
+    rise('E1', t, 7.65); rise('E2', t, 7.9); rise('Ecap', t, 8.3, 0.5, 20)
+  }
+  // F · masks draw
+  if (vis('F', t, ...T.F)) {
+    const zoom = `scale(${1.0 + 0.04 * lin(t, ...T.F)})`
+    $('Fimg').style.transform = zoom
+    const svg = $('masks')
+    svg.style.transform = zoom  // masks stay registered to the frame while it zooms
+    if (!svg.dataset.built) {
+      svg.innerHTML = MASKS.map((m, i) => {
+        const d = 'M' + m.pts.map((p) => p.join(',')).join('L') + 'Z'
+        const [cx, cy] = m.pts.reduce((a, p) => [Math.min(a[0], p[0]), Math.min(a[1], p[1])], [1e9, 1e9])
+        return `<path id="m${i}" d="${d}" fill="${m.color}" fill-opacity="0" stroke="${m.color}" stroke-width="5" stroke-linejoin="round" stroke-dasharray="4000" stroke-dashoffset="4000"/>` +
+          `<g id="ml${i}" opacity="0"><rect x="${cx}" y="${cy - 52}" rx="8" width="${m.label.length * 17 + 46}" height="42" fill="rgba(5,6,8,.78)"/><rect x="${cx + 14}" y="${cy - 37}" width="12" height="12" rx="2" fill="${m.color}"/><text x="${cx + 36}" y="${cy - 23}" font-family="Inter" font-weight="600" font-size="24" fill="#fff">${m.ref ? 'REF · ' : ''}${m.label}</text></g>`
+      }).join('')
+      svg.dataset.built = '1'
+    }
+    MASKS.forEach((m, i) => {
+      const a = 9.55 + i * 0.28
+      const x = easeIO(lin(t, a, a + 0.7))
+      const p = $('m' + i)
+      p.setAttribute('stroke-dashoffset', 4000 * (1 - x))
+      p.setAttribute('fill-opacity', 0.16 * lin(t, a + 0.5, a + 0.9))
+      $('ml' + i).setAttribute('opacity', lin(t, a + 0.45, a + 0.7))
+    })
+    rise('F1', t, 9.35); rise('F2', t, 9.5); rise('Fcap', t, 9.9, 0.5, 20)
+  }
+  // G · posterior draws left to right, then the label
+  if (vis('G', t, ...T.G)) {
+    const x = easeIO(lin(t, 11.75, 12.9))
+    const r1 = 200 * Math.pow(6000 / 200, x)
+    const pts = []
+    for (let i = 0; i <= 600; i++) {
+      const r = 200 * Math.pow(6000 / 200, (i / 600) * x)
+      pts.push(`${X(r).toFixed(1)},${postY(r).toFixed(1)}`)
+    }
+    $('Gline').setAttribute('d', 'M' + pts.join('L'))
+    $('Garea').setAttribute('d', `M${X(200)},820L` + pts.join('L') + `L${X(r1).toFixed(1)},820Z`)
+    const shown = r1 >= 1498
+    $('Gdot').setAttribute('cx', X(1498)); $('Gdot').setAttribute('cy', postY(1498))
+    $('Gdot').setAttribute('opacity', shown ? 1 : 0)
+    const lab = $('Glab')
+    lab.textContent = '1,498 rpm · P = 0.98'
+    lab.style.left = X(1498) + 34 + 'px'; lab.style.top = postY(1498) - 24 + 'px'
+    lab.style.opacity = shown ? lin(t, 12.55, 12.85) : 0
+    rise('G1', t, 11.6); rise('G2', t, 11.75); rise('Gcap', t, 12.2, 0.5, 20)
+  }
+  // H · logo types on
+  if (vis('H', t, T.H[0], DUR + 1, 0.2, 0.01)) {
+    const word = 'ARGONAUT'
+    const n = Math.round(word.length * easeOut(lin(t, 13.75, 14.45)))
+    $('Hlogo').innerHTML = word.slice(0, n).split('').map((c) => `<span>${c}</span>`).join('') + `<span style="opacity:0">${word.slice(n)}</span>`
+    $('Hlogo').style.transform = `scale(${1.05 - 0.05 * expo(lin(t, 13.7, 14.8))})`
+    rise('Htag', t, 14.6, 0.5, 30)
+    rise('Hmeta', t, 14.9, 0.5, 20)
+    $('Hglow').style.opacity = 0.6 + 0.4 * Math.sin(t * 2)
+  }
+  // credits for whatever footage is on screen
+  const sc = Object.keys(T).find((k) => t >= T[k][0] && t <= T[k][1] && CREDITS[k])
+  $('credit').textContent = sc ? CREDITS[sc] : ''
+}
+window.render = render
+window.DURATION = DUR
+render(0)
+</script>
+</body>
+</html>

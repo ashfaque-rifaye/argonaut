@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircleStop, Crosshair, Keyboard, Play, ShieldCheck, Sigma } from 'lucide-react'
+import { CircleStop, Compass, Crosshair, Keyboard, Layers, Play, ShieldCheck, Sigma } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { link } from '../lib/socket'
 import { fmtClock } from '../lib/format'
@@ -140,7 +140,7 @@ export function Header() {
   const cmd = (name: 'start_coastdown' | 'stop' | 'identify' | 'optimize' | 'verify') => link.send({ type: 'command', name })
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line-1 bg-bg-1 px-3 md:px-4">
+    <header className="glass-float sticky top-0 z-40 flex h-12 shrink-0 items-center gap-4 border-x-0 border-t-0 px-3 md:px-4">
       <a href="/" onClick={onLink} aria-label="Argonaut home" title="Back to the overview" className="shrink-0 rounded-md transition-opacity hover:opacity-80">
         <Logo />
       </a>
@@ -185,6 +185,21 @@ export function Header() {
           <span className="num text-fg-4">{rate} ev/s</span>
         </span>
         <div className="mx-1 hidden h-5 w-px bg-line-2 sm:block" />
+        <button
+          onClick={() => useStore.getState().set({ welcomeOpen: true })}
+          data-tip="Choose what to analyse: a recorded machine, your own footage or a live camera feed"
+          className="inline-flex h-7 items-center gap-1.5 rounded-[8px] border border-line-2 bg-bg-2/70 px-2 text-[11.5px] font-medium text-fg-1 transition-colors hover:border-accent/50 hover:bg-bg-3"
+        >
+          <Layers size={13} /> New source
+        </button>
+        <button
+          onClick={() => useStore.getState().set({ welcomeOpen: false, tourStep: 0 })}
+          data-tip="A one-minute guided tour of the console"
+          aria-label="Guided tour"
+          className="hidden h-7 items-center gap-1 rounded-[8px] border border-line-2 bg-bg-2/70 px-2 text-[11.5px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg-1 sm:inline-flex"
+        >
+          <Compass size={13} /> Tour
+        </button>
         <button
           onClick={showShortcuts}
           title="Keyboard shortcuts (?)"

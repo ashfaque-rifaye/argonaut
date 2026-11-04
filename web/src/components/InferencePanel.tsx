@@ -10,9 +10,10 @@ export function IdentifyTabs() {
   const tab = useStore((s) => s.identifyTab)
   const has = useStore((s) => s.kinematics != null)
   const set = useStore((s) => s.set)
-  const tabs: { v: 'modes' | 'faults'; label: string }[] = [
-    { v: 'modes', label: 'Modes' },
+  const tabs: { v: 'modes' | 'faults' | 'twin'; label: string }[] = [
     { v: 'faults', label: 'Faults' },
+    { v: 'modes', label: 'Modes' },
+    { v: 'twin', label: 'Twin' },
   ]
   return (
     <div role="tablist" className="flex items-center rounded-[4px] border border-line-2 p-px">

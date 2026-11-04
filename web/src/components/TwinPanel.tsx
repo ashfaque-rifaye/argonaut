@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { IdentifyTabs } from './InferencePanel'
 import { link } from '../lib/socket'
 import { fx, niceTicks } from '../lib/format'
 import { useSize } from '../lib/useSize'
@@ -75,6 +76,7 @@ export function TwinPanel() {
       meta={asset ? `affinity @ ${Math.round(rpm)} rpm` : 'H–Q · η · NPSHr'}
       right={
         <>
+          <IdentifyTabs />
           <Btn size="xs" variant="ghost" onClick={() => file.current?.click()} title="Upload pump-curve datasheet (PDF/PNG); Muse Spark parses it">
             <FileUp size={11} /> Datasheet
           </Btn>

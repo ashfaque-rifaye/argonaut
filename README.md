@@ -10,6 +10,11 @@ Argonaut turns a video of a pump, fan, motor, diesel genset or washing machine i
 - **Muse Spark** reads the scene, nameplate and pump-curve datasheet, coaches the capture, and *listens* to the clip as an independent check.
 - **Kinematic inference** ([docs/KINEMATICS.md](docs/KINEMATICS.md)). Muse Spark also says what the machine physically is: engine stroke, blade count, poles, gear teeth, any rpm on a controller display. A Bayesian harmonic sieve with an Occam factor then turns the sound into a **posterior over running speed**, settling ambiguities a spectrum alone cannot (a 1,500 rpm four-stroke's half orders against a 750 rpm machine). A log-odds model gives a **posterior per fault hypothesis**, with each piece of evidence in decibans, and marks hypotheses the footage cannot support as not evaluable. On a genset whose controller reads 1,542 rpm, the microphone posterior gives 1,542.4 rpm without seeing the display.
 - **Muse Wonder** is a tool-using engineer agent. It never invents numbers. It diagnoses from the measured evidence (imbalance, misalignment, resonance, cavitation, ISO 20816 severity) and runs a **constrained real-time optimiser** over the drive speed: minimise energy at the required duty, stay clear of resonance bands, keep NPSH margin, and stay in zone A/B.
+- **Agents act, not just detect.** After the diagnosis Muse Wonder queues corrective actions in the console's *Agent actions* panel; the operator approves, Argonaut executes on the drive and re-measures:
+  - **Field balancing** by the influence-coefficient method (baseline 1× vector, trial mass, α = (V1 − V0)/T, correction C = −V0/α), checked against ISO 21940-11 G6.3. In the recorded run the agent cut 1× vibration by 84 % on the simulated drive.
+  - **Drive lock-out of resonance bands**: programs the VFD's skip frequencies over Modbus, reads them back and proves the drive refuses a setpoint inside a band.
+  - **Work orders** for the CMMS (ISO 14224 failure mode, risk-matrix priority, tasks with tolerances, safety, parts, verification), downloadable as Markdown; **impact** (kWh, $, CO₂ per year); **follow-up** date.
+  - Without a connected drive (real footage) the physical steps go into the work order for a technician instead.
 - A person **approves**. The setpoint is written to the drive (a simulated VFD over Modbus TCP), and Argonaut **re-measures to verify** the predicted change.
 - **Muse Voice Transcribe** provides realtime, code-switched voice control (English, Hindi, Tamil, …). **Muse Spark Open** (open weights, via Baseten) provides a private mode.
 
@@ -28,6 +33,9 @@ cd web && pnpm install && pnpm dev                     # control room UI at http
 - **Tests:** `uv run pytest -q`, covering the DSP engine, kinematic inference and the simulator plus ground-truth videos.
 - **Fault-inference evaluation on ground truth:** `uv run python scripts/fault_eval.py` (6/6 synthetic clips).
 - **Your own video:** drop an mp4/mov on the live view or use the *Upload video* tile under it. The console runs it through the same engine.
+- **A live camera:** *New source → Connect a live feed* takes an RTSP / HTTP / HLS URL (or a camera index); the server decodes it into the live engine and relays an MJPEG preview to the browser.
+- **Agentic demo with the drive:** start the plant (`uv run python -m argonaut.sim.plant --kind pump --modbus-port 5020 --noise 0.02 --speed 1480 --ramp 300`), then `uv run python scripts/record_agent_demo.py`, or open the recorded run `?replay=demo_agent_actions&speed=4`.
+- **Intro / outro films:** `npm i --prefix film playwright-core@1.48.2` then `node film/render.mjs intro` (or `outro`): frame-accurate HTML motion graphics rendered through Microsoft Edge to `film/out/*.mp4`.
 
 ## Layout
 | Path | What |

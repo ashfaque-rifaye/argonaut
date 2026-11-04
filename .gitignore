@@ -30,3 +30,7 @@ data/runs/*/clip_*
 web/dist/
 scripts/_*.py
 .claude/settings.local.json
+
+# film renderer
+film/node_modules/
+film/out/frames-*/
