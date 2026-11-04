@@ -766,9 +766,18 @@ def _peak_hz(seg: np.ndarray, fps: float) -> float | None:
 def _first_color_frame(path: str, scale: float) -> np.ndarray:
     cap = cv2.VideoCapture(path)
     ok, fr = cap.read()
-    cap.release()
     if not ok:
+        cap.release()
         raise ValueError("cannot read first frame")
+    # many clips fade in from black: Muse Spark needs a frame with something in it
+    for _ in range(int(5 * (cap.get(cv2.CAP_PROP_FPS) or 30))):
+        if float(fr.mean()) >= 15.0:
+            break
+        ok, nxt = cap.read()
+        if not ok:
+            break
+        fr = nxt
+    cap.release()
     if scale != 1.0:
         fr = cv2.resize(fr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     return fr
